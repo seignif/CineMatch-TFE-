@@ -1,0 +1,15 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "ms-python.debugpy",
+    "bradlc.vscode-tailwindcss",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "ms-vscode.vscode-typescript-next",
+    "mtxr.sqltools",
+    "mtxr.sqltools-driver-pg",
+    "rangav.vscode-thunder-client",
+    "eamodio.gitlens"
+  ]
+}

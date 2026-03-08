@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.env
+*.egg-info/
+dist/
+build/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+media/
+
+# Node
+node_modules/
+dist/
+.npm
+
+# Frontend build
+frontend/dist/
+frontend/.env
+frontend/.env.local
+
+# IDEs
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+
+# pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Fichiers personnels
+PROMPT_CLAUDE_CODE.md
