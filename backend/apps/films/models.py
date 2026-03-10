@@ -41,7 +41,7 @@ class Film(models.Model):
 
 
 class CinemaChain(models.Model):
-    allocine_id = models.CharField(max_length=50, unique=True)
+    movieglu_id = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=200)
     logo = models.URLField(blank=True)
     website = models.URLField(blank=True)
@@ -54,7 +54,7 @@ class CinemaChain(models.Model):
 
 
 class Cinema(models.Model):
-    allocine_id = models.CharField(max_length=50, unique=True)
+    movieglu_id = models.CharField(max_length=50, unique=True)
     name = models.CharField(max_length=255)
     chain = models.ForeignKey(CinemaChain, null=True, blank=True, on_delete=models.SET_NULL)
     address = models.TextField()
@@ -63,6 +63,7 @@ class Cinema(models.Model):
     country = models.CharField(max_length=2, default='BE')
     latitude = models.DecimalField(max_digits=10, decimal_places=8, null=True, blank=True)
     longitude = models.DecimalField(max_digits=11, decimal_places=8, null=True, blank=True)
+    # location = PointField(srid=4326)  # TODO: activer PostGIS en production (nécessite GDAL)
     phone = models.CharField(max_length=20, blank=True)
     website = models.URLField(blank=True)
     is_active = models.BooleanField(default=True)
