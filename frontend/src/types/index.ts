@@ -13,7 +13,6 @@ export interface RegisterData {
   password2: string
   date_of_birth?: string
   city?: string
-  rgpd_consent: boolean
 }
 
 export interface AuthTokens {
@@ -34,9 +33,8 @@ export interface User {
 }
 
 export interface UserProfile {
-  id: number
   bio: string
-  profile_picture?: string
+  profile_picture?: string | null
   mood: string
   genre_preferences: Record<string, number>
   films_signature: Film[]
@@ -47,48 +45,51 @@ export interface UserProfile {
 // ---- Films ----
 export interface Genre {
   id: number
-  tmdb_id: number
-  nom: string
+  name: string
+  tmdb_id?: number | null
 }
 
 export interface Film {
   id: number
-  tmdb_id: number
-  titre: string
-  titre_original: string
+  kinepolis_id: string
+  title: string
   synopsis: string
-  poster: string
-  backdrop: string
+  short_synopsis: string
+  duration: number | null
+  release_date: string | null
+  language: string
+  is_future: boolean
+  poster_url: string
+  backdrop_url: string
   trailer_youtube_key: string
-  duree?: number
-  date_sortie?: string
-  note?: number
+  tmdb_rating: number | null
+  imdb_code: string
   genres: Genre[]
-  is_now_playing: boolean
+  seances?: Seance[]
 }
 
 export interface Cinema {
   id: number
-  allocine_id: string
+  kinepolis_id: string
   name: string
-  address: string
-  city: string
-  postal_code: string
-  latitude?: number
-  longitude?: number
-  website: string
+  country: string
+  language: string
+  latitude: number | null
+  longitude: number | null
   is_active: boolean
 }
 
 export interface Seance {
   id: number
-  film: Film
+  kinepolis_session_id: string
   cinema: Cinema
-  date_heure: string
-  version: 'VF' | 'VO' | 'VOST'
-  format: '2D' | '3D' | 'IMAX' | '4DX'
-  places_restantes?: number
+  showtime: string
+  language: string
+  hall: number | null
+  is_sold_out: boolean
+  has_cosy_seating: boolean
   booking_url: string
+  raw_attributes: string
 }
 
 // ---- Matching ----
@@ -102,44 +103,13 @@ export interface Match {
   raisons_compatibilite: string[]
   status: 'active' | 'blocked' | 'expired'
   created_at: string
-  conversation?: Conversation
-}
-
-export interface PlannedOuting {
-  id: number
-  match: Match
-  seance: Seance
-  proposer: User
-  status: 'proposed' | 'confirmed' | 'completed' | 'cancelled'
-  meeting_place: string
-  meeting_time?: string
-  proposer_booked: boolean
-  partner_booked: boolean
-  created_at: string
-}
-
-// ---- Chat ----
-export interface Conversation {
-  id: number
-  match: Match
-  created_at: string
-  messages?: Message[]
-}
-
-export interface Message {
-  id: number
-  conversation: number
-  sender: User
-  contenu: string
-  lu: boolean
-  created_at: string
 }
 
 // ---- API ----
 export interface PaginatedResponse<T> {
   count: number
-  next?: string
-  previous?: string
+  next?: string | null
+  previous?: string | null
   results: T[]
 }
 

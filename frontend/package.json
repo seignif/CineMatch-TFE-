@@ -26,6 +26,7 @@
   "devDependencies": {
     "@hookform/resolvers": "^3.9.1",
     "@types/leaflet": "^1.9.14",
+    "@types/node": "^25.5.0",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",

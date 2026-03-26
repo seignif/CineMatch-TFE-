@@ -50,4 +50,34 @@ api.interceptors.response.use(
   }
 )
 
+export const filmsApi = {
+  getAll: (params?: { search?: string; is_future?: boolean; page?: number }) =>
+    api.get('/films/films/', { params }),
+  getById: (id: number) => api.get(`/films/films/${id}/`),
+  getSeances: (id: number) => api.get(`/films/films/${id}/seances/`),
+}
+
+export const cinemasApi = {
+  getAll: () => api.get('/films/cinemas/'),
+}
+
+export const authApi = {
+  register: (data: object) => api.post('/auth/register/', data),
+  login: (data: object) => api.post('/auth/login/', data),
+  logout: (refresh: string) => api.post('/auth/logout/', { refresh }),
+}
+
+export const usersApi = {
+  me: () => api.get('/users/me/'),
+  updateMe: (data: object) => api.patch('/users/me/', data),
+  updateProfile: (data: object) => api.patch('/users/me/profile/', data),
+  uploadPicture: (file: File) => {
+    const form = new FormData()
+    form.append('picture', file)
+    return api.post('/users/me/picture/', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+}
+
 export default api
