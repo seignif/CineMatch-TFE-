@@ -111,14 +111,14 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
-    'DEFAULT_THROTTLE_CLASSES': [
+    'DEFAULT_THROTTLE_CLASSES': [] if DEBUG else [
         'rest_framework.throttling.AnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/hour',
-        'user': '1000/hour',
-        'login': '5/300s',  # 5 tentatives / 5 min
+        'anon': '1000/hour',
+        'user': '5000/hour',
+        'login': '20/300s',
     },
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
