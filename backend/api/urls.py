@@ -1,11 +1,9 @@
-from django.urls import path, include
-from rest_framework_simplejwt.views import TokenRefreshView
+from django.urls import include, path
 
 urlpatterns = [
-    # Auth
-    path('auth/', include('apps.users.urls')),
-    path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    # Resources
+    # Auth + Users (users/urls.py contient les préfixes auth/ et users/)
+    path('', include('apps.users.urls')),
+    # Ressources
     path('films/', include('apps.films.urls')),
     path('matching/', include('apps.matching.urls')),
     path('chat/', include('apps.chat.urls')),
