@@ -3,10 +3,10 @@ from django.db import models
 
 
 MOOD_CHOICES = [
-    ('rire', 'Rire'),
-    ('réfléchir', 'Réfléchir'),
-    ('ému', 'Ému'),
-    ('adrénaline', 'Adrénaline'),
+    ('rire', 'Envie de rire'),
+    ('reflechir', 'Besoin de reflechir'),
+    ('emu', "Envie d'etre emu"),
+    ('adrenaline', "Besoin d'adrenaline"),
 ]
 
 
@@ -30,7 +30,7 @@ class UserProfile(models.Model):
     bio = models.TextField(max_length=500, blank=True)
     profile_picture = models.ImageField(upload_to='profiles/', null=True, blank=True)
     mood = models.CharField(max_length=20, choices=MOOD_CHOICES, blank=True)
-    genre_preferences = models.JSONField(default=dict)  # {"action": 8, "horreur": 5, ...}
+    genre_preferences = models.JSONField(default=dict)
     films_signature = models.ManyToManyField(
         'films.Film',
         through='ProfileFilmSignature',
@@ -51,11 +51,13 @@ class UserProfile(models.Model):
 
 
 class ProfileFilmSignature(models.Model):
+    """Films signature de l'utilisateur (max 5)."""
     profile = models.ForeignKey(UserProfile, on_delete=models.CASCADE)
     film = models.ForeignKey('films.Film', on_delete=models.CASCADE)
+    order = models.IntegerField(default=0)
     added_at = models.DateTimeField(auto_now_add=True)
-    rating = models.IntegerField(null=True, blank=True)  # Note personnelle 1-5
 
     class Meta:
         db_table = 'users_profile_film_signature'
+        ordering = ['order']
         unique_together = ('profile', 'film')
