@@ -160,6 +160,18 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Europe/Brussels'
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
+from celery.schedules import crontab
+CELERY_BEAT_SCHEDULE = {
+    'sync-kinepolis-every-3h': {
+        'task': 'apps.films.tasks.sync_kinepolis_all',
+        'schedule': crontab(minute=0, hour='*/3'),
+    },
+    'cleanup-old-seances-daily': {
+        'task': 'apps.films.tasks.cleanup_old_seances',
+        'schedule': crontab(hour=6, minute=0),
+    },
+}
+
 # Redis Cache
 CACHES = {
     'default': {
@@ -173,3 +185,11 @@ CACHES = {
 TMDB_API_KEY = config('TMDB_API_KEY', default='')
 TMDB_BASE_URL = 'https://api.themoviedb.org/3'
 TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w500'
+
+# MovieGlu API (Sandbox TFE — quota 10 000 req/mois)
+MOVIEGLU_CLIENT = config('MOVIEGLU_CLIENT', default='EPHE')
+MOVIEGLU_API_KEY = config('MOVIEGLU_API_KEY', default='')
+MOVIEGLU_AUTHORIZATION = config('MOVIEGLU_AUTHORIZATION', default='')
+MOVIEGLU_TERRITORY = config('MOVIEGLU_TERRITORY', default='XX')
+MOVIEGLU_API_VERSION = config('MOVIEGLU_API_VERSION', default='v201')
+MOVIEGLU_BASE_URL = config('MOVIEGLU_BASE_URL', default='https://api-gate2.movieglu.com/')

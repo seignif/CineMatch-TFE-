@@ -2,102 +2,85 @@ from django.db import models
 
 
 class Genre(models.Model):
-    tmdb_id = models.IntegerField(unique=True)
-    nom = models.CharField(max_length=50, unique=True)
+    tmdb_id = models.IntegerField(unique=True, null=True, blank=True)
+    name = models.CharField(max_length=50, unique=True)
 
     class Meta:
         db_table = 'films_genre'
-
-    def __str__(self):
-        return self.nom
-
-
-class Film(models.Model):
-    tmdb_id = models.IntegerField(unique=True)
-    titre = models.CharField(max_length=255, db_index=True)
-    titre_original = models.CharField(max_length=255)
-    synopsis = models.TextField(blank=True)
-    poster = models.URLField(blank=True)
-    backdrop = models.URLField(blank=True)
-    trailer_youtube_key = models.CharField(max_length=50, blank=True)
-    duree = models.IntegerField(null=True, blank=True)  # minutes
-    date_sortie = models.DateField(null=True, blank=True)
-    note = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
-    vote_count = models.IntegerField(default=0)
-    genres = models.ManyToManyField(Genre, blank=True)
-    is_now_playing = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        db_table = 'films_film'
-        indexes = [
-            models.Index(fields=['titre']),
-            models.Index(fields=['is_now_playing', '-date_sortie']),
-        ]
-
-    def __str__(self):
-        return self.titre
-
-
-class CinemaChain(models.Model):
-    allocine_id = models.CharField(max_length=50, unique=True)
-    name = models.CharField(max_length=200)
-    logo = models.URLField(blank=True)
-    website = models.URLField(blank=True)
-
-    class Meta:
-        db_table = 'films_cinema_chain'
 
     def __str__(self):
         return self.name
 
 
 class Cinema(models.Model):
-    allocine_id = models.CharField(max_length=50, unique=True)
+    kinepolis_id = models.CharField(max_length=20, unique=True)  # ex: "KBRAI"
     name = models.CharField(max_length=255)
-    chain = models.ForeignKey(CinemaChain, null=True, blank=True, on_delete=models.SET_NULL)
-    address = models.TextField()
-    city = models.CharField(max_length=100, db_index=True)
-    postal_code = models.CharField(max_length=10)
     country = models.CharField(max_length=2, default='BE')
+    language = models.CharField(max_length=5, default='FR')
+    is_active = models.BooleanField(default=True)
     latitude = models.DecimalField(max_digits=10, decimal_places=8, null=True, blank=True)
     longitude = models.DecimalField(max_digits=11, decimal_places=8, null=True, blank=True)
-    phone = models.CharField(max_length=20, blank=True)
-    website = models.URLField(blank=True)
-    is_active = models.BooleanField(default=True)
-    last_sync = models.DateTimeField(null=True, blank=True)
+    last_sync = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'films_cinema'
+
+    def __str__(self):
+        return self.name
+
+
+class Film(models.Model):
+    kinepolis_id = models.CharField(max_length=50, unique=True)  # ex: "HO00011897"
+    corporate_id = models.IntegerField(null=True, blank=True)
+    tmdb_id = models.IntegerField(null=True, blank=True, unique=True)
+    imdb_code = models.CharField(max_length=20, blank=True)
+    title = models.CharField(max_length=255, db_index=True)
+    synopsis = models.TextField(blank=True)
+    short_synopsis = models.TextField(blank=True)
+    duration = models.IntegerField(null=True, blank=True)
+    release_date = models.DateTimeField(null=True, blank=True)
+    language = models.CharField(max_length=5, default='FR')
+    audio_language = models.CharField(max_length=5, blank=True)
+    is_future = models.BooleanField(default=False)
+    poster_url = models.URLField(blank=True)
+    backdrop_url = models.URLField(blank=True)
+    trailer_youtube_key = models.CharField(max_length=50, blank=True)
+    tmdb_rating = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    genres = models.ManyToManyField(Genre, blank=True)
+    last_sync = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'films_film'
         indexes = [
-            models.Index(fields=['city']),
-            models.Index(fields=['is_active']),
+            models.Index(fields=['title']),
+            models.Index(fields=['is_future', '-release_date']),
         ]
 
     def __str__(self):
-        return f"{self.name} ({self.city})"
+        return self.title
 
 
 class Seance(models.Model):
-    VERSION_CHOICES = [('VF', 'VF'), ('VO', 'VO'), ('VOST', 'VOST')]
-    FORMAT_CHOICES = [('2D', '2D'), ('3D', '3D'), ('IMAX', 'IMAX'), ('4DX', '4DX')]
-
+    kinepolis_session_id = models.CharField(max_length=50, unique=True)  # ex: "KBRAI-208470"
     film = models.ForeignKey(Film, on_delete=models.CASCADE, related_name='seances')
     cinema = models.ForeignKey(Cinema, on_delete=models.CASCADE, related_name='seances')
-    date_heure = models.DateTimeField(db_index=True)
-    version = models.CharField(max_length=4, choices=VERSION_CHOICES, default='VF')
-    format = models.CharField(max_length=10, choices=FORMAT_CHOICES, default='2D')
-    places_restantes = models.IntegerField(null=True, blank=True)
+    showtime = models.DateTimeField(db_index=True)
+    language = models.CharField(max_length=5, default='FR')
+    hall = models.IntegerField(null=True, blank=True)
+    vista_session_id = models.IntegerField(null=True, blank=True)
+    is_sold_out = models.BooleanField(default=False)
+    has_cosy_seating = models.BooleanField(default=False)
     booking_url = models.URLField(blank=True)
+    raw_attributes = models.CharField(max_length=100, blank=True)
+    last_sync = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'films_seance'
+        ordering = ['showtime']
         indexes = [
-            models.Index(fields=['film', 'cinema', 'date_heure']),
-            models.Index(fields=['date_heure']),
+            models.Index(fields=['film', 'cinema', 'showtime']),
+            models.Index(fields=['showtime']),
         ]
-        unique_together = ('film', 'cinema', 'date_heure', 'version', 'format')
 
     def __str__(self):
-        return f"{self.film.titre} @ {self.cinema.name} - {self.date_heure}"
+        return f"{self.film.title} @ {self.cinema.name} - {self.showtime}"

@@ -1,5 +1,12 @@
-from django.urls import path
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
+
+from .views import CinemaViewSet, FilmViewSet
+
+router = DefaultRouter()
+router.register('films', FilmViewSet, basename='film')
+router.register('cinemas', CinemaViewSet, basename='cinema')
 
 urlpatterns = [
-    # Endpoints films - à implémenter en Sprint 1
+    path('', include(router.urls)),
 ]
