@@ -5,7 +5,7 @@ djangorestframework-simplejwt==5.3.1
 django-cors-headers==4.6.0
 
 # Database
-psycopg2-binary==2.9.10
+psycopg2-binary==2.9.10  # Inclut le support PostGIS via django.contrib.gis
 
 # WebSocket
 channels==4.2.0
