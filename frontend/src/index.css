@@ -2,8 +2,124 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --bg-primary: #0A0A0F;
+  --bg-secondary: #12121A;
+  --bg-card: #1A1A2E;
+  --accent-red: #E63946;
+  --accent-gold: #FFD700;
+  --text-primary: #F5F5F5;
+  --text-muted: #8892A4;
+  --border: rgba(255, 255, 255, 0.08);
+}
+
 @layer base {
   body {
-    @apply bg-dark text-white font-sans;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'DM Sans', system-ui, sans-serif;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #2A2A3E transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: #2A2A3E;
+    border-radius: 3px;
+  }
+}
+
+@layer components {
+  .film-card {
+    @apply relative overflow-hidden rounded-xl cursor-pointer;
+    aspect-ratio: 2/3;
+    background: var(--bg-card);
+  }
+
+  .film-card .overlay {
+    @apply absolute inset-0 flex flex-col justify-end p-4;
+    background: var(--gradient-card, linear-gradient(to top, rgba(10,10,15,0.95) 0%, rgba(10,10,15,0.4) 60%, transparent 100%));
+    opacity: 0;
+    transform: translateY(8px);
+    transition: all 0.3s ease;
+  }
+
+  .film-card:hover .overlay {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .glass {
+    background: rgba(26, 26, 46, 0.7);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--border);
+  }
+
+  .btn-primary {
+    @apply px-6 py-3 rounded-lg font-medium transition-all duration-200;
+    background: var(--accent-red);
+    color: white;
+  }
+
+  .btn-primary:hover {
+    background: #c1121f;
+    transform: translateY(-1px);
+  }
+
+  .btn-secondary {
+    @apply px-6 py-3 rounded-lg font-medium transition-all duration-200;
+    background: rgba(255,255,255,0.08);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+  }
+
+  .btn-secondary:hover {
+    background: rgba(255,255,255,0.12);
+  }
+
+  .input-field {
+    @apply w-full px-4 py-3 rounded-lg outline-none transition-all duration-200;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+  }
+
+  .input-field::placeholder {
+    color: var(--text-muted);
+  }
+
+  .input-field:focus {
+    border-color: var(--accent-red);
+    background: rgba(255,255,255,0.07);
+  }
+
+  .input-field option,
+  select option {
+    background-color: #1A1A2E;
+    color: #F5F5F5;
+  }
+
+  .badge-gold {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-mono font-bold;
+    background: rgba(255, 215, 0, 0.15);
+    color: var(--accent-gold);
+    border: 1px solid rgba(255, 215, 0, 0.3);
+  }
+
+  .badge-red {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold;
+    background: rgba(230, 57, 70, 0.2);
+    color: var(--accent-red);
+    border: 1px solid rgba(230, 57, 70, 0.3);
   }
 }
