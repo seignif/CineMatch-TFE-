@@ -1,0 +1,9 @@
+[run]
+omit =
+    */migrations/*
+    */management/*
+    apps/films/services/kinepolis_service.py
+    apps/films/services/tmdb_service.py
+    apps/chat/consumers.py
+    apps/chat/routing.py
+    apps/films/tasks.py

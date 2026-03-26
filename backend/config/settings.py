@@ -14,7 +14,6 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    # 'django.contrib.gis',  # PostGIS - activé en production (nécessite GDAL)
     # Third-party
     'rest_framework',
     'rest_framework_simplejwt',
@@ -65,7 +64,7 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # Database
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',  # postgis en prod
+        'ENGINE': 'django.db.backends.postgresql',
         'NAME': config('DB_NAME', default='cinematch'),
         'USER': config('DB_USER', default='cinematch_user'),
         'PASSWORD': config('DB_PASSWORD', default='cinematch_pass'),
@@ -161,6 +160,18 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Europe/Brussels'
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
+from celery.schedules import crontab
+CELERY_BEAT_SCHEDULE = {
+    'sync-kinepolis-every-3h': {
+        'task': 'apps.films.tasks.sync_kinepolis_all',
+        'schedule': crontab(minute=0, hour='*/3'),
+    },
+    'cleanup-old-seances-daily': {
+        'task': 'apps.films.tasks.cleanup_old_seances',
+        'schedule': crontab(hour=6, minute=0),
+    },
+}
+
 # Redis Cache
 CACHES = {
     'default': {
@@ -182,25 +193,3 @@ MOVIEGLU_AUTHORIZATION = config('MOVIEGLU_AUTHORIZATION', default='')
 MOVIEGLU_TERRITORY = config('MOVIEGLU_TERRITORY', default='XX')
 MOVIEGLU_API_VERSION = config('MOVIEGLU_API_VERSION', default='v201')
 MOVIEGLU_BASE_URL = config('MOVIEGLU_BASE_URL', default='https://api-gate2.movieglu.com/')
-
-# Celery Beat — planification des tâches de synchronisation
-from celery.schedules import crontab
-
-CELERY_BEAT_SCHEDULE = {
-    'sync-tmdb-films-daily': {
-        'task': 'apps.films.tasks.sync_tmdb_films',
-        'schedule': crontab(hour=4, minute=0),                      # 4h du matin
-    },
-    'sync-movieglu-showtimes-daily': {
-        'task': 'apps.films.tasks.sync_movieglu_showtimes',
-        'schedule': crontab(hour=5, minute=0),                      # 5h du matin
-    },
-    'cleanup-old-showtimes-daily': {
-        'task': 'apps.films.tasks.cleanup_old_showtimes',
-        'schedule': crontab(hour=6, minute=0),                      # 6h du matin
-    },
-    'sync-movieglu-cinemas-weekly': {
-        'task': 'apps.films.tasks.sync_movieglu_cinemas',
-        'schedule': crontab(hour=3, minute=0, day_of_week=0),       # Dimanche 3h
-    },
-}
