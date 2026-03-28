@@ -9,12 +9,17 @@ class Conversation(models.Model):
         related_name='conversation',
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'chat_conversation'
 
     def __str__(self):
         return f"Conversation #{self.pk}"
+
+    def get_other_user(self, user):
+        m = self.match
+        return m.user2 if m.user1 == user else m.user1
 
 
 class Message(models.Model):
@@ -28,8 +33,8 @@ class Message(models.Model):
         on_delete=models.CASCADE,
         related_name='messages_sent',
     )
-    contenu = models.TextField()
-    lu = models.BooleanField(default=False)
+    content = models.TextField()
+    is_read = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
@@ -40,4 +45,4 @@ class Message(models.Model):
         ordering = ['created_at']
 
     def __str__(self):
-        return f"[{self.sender.email}] {self.contenu[:50]}"
+        return f"[{self.sender.email}] {self.content[:50]}"
