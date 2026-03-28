@@ -184,6 +184,7 @@ CACHES = {
 
 # APIs externes
 TMDB_API_KEY = config('TMDB_API_KEY', default='')
+ANTHROPIC_API_KEY = config('ANTHROPIC_API_KEY', default='')
 TMDB_BASE_URL = 'https://api.themoviedb.org/3'
 TMDB_IMAGE_BASE_URL = 'https://image.tmdb.org/t/p/w500'
 
