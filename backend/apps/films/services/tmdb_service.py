@@ -185,10 +185,17 @@ class TMDbService:
         backdrop_path = details.get('backdrop_path') or tmdb_data.get('backdrop_path', '')
         vote_average = details.get('vote_average') or tmdb_data.get('vote_average')
 
+        # Si un autre film a déjà ce tmdb_id, on n'écrase pas la clé unique
+        from apps.films.models import Film as FilmModel
+        tmdb_id_already_used = FilmModel.objects.filter(
+            tmdb_id=tmdb_id
+        ).exclude(pk=film.pk).exists()
+
         updates = {
-            'tmdb_id': tmdb_id,
             'trailer_youtube_key': self._extract_trailer_key(details),
         }
+        if not tmdb_id_already_used:
+            updates['tmdb_id'] = tmdb_id
 
         if poster_path:
             updates['poster_url'] = self.make_poster_url(poster_path)
