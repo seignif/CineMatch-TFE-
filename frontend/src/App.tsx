@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './store/authStore'
 import Layout from './components/Layout'
@@ -6,18 +7,10 @@ import FilmDetail from './pages/FilmDetail'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Profile from './pages/Profile'
-
-const Placeholder = ({ name }: { name: string }) => (
-  <div className="flex items-center justify-center min-h-screen">
-    <div className="text-center">
-      <h1 className="font-display text-5xl tracking-wider mb-2">
-        CINE<span style={{ color: 'var(--accent-red)' }}>MATCH</span>
-      </h1>
-      <p className="text-[var(--text-muted)]">Page : {name}</p>
-      <p className="text-sm mt-4" style={{ color: 'var(--text-muted)' }}>Sprint 3 — à venir</p>
-    </div>
-  </div>
-)
+import Matching from './pages/Matching'
+import Matches from './pages/Matches'
+import Chat from './pages/Chat'
+import ConversationView from './pages/ConversationView'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
@@ -25,6 +18,12 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
+  const { isAuthenticated, fetchMe } = useAuthStore()
+
+  useEffect(() => {
+    if (isAuthenticated) fetchMe()
+  }, [])
+
   return (
     <BrowserRouter>
       <Routes>
@@ -34,13 +33,11 @@ function App() {
         <Route element={<Layout />}>
           <Route path="/films" element={<Films />} />
           <Route path="/films/:id" element={<FilmDetail />} />
-          <Route path="/profile" element={
-            <PrivateRoute><Profile /></PrivateRoute>
-          } />
-          <Route path="/matching" element={<Placeholder name="Matching" />} />
-          <Route path="/matches" element={<Placeholder name="Mes matchs" />} />
-          <Route path="/chat" element={<Placeholder name="Chat" />} />
-          <Route path="/outings" element={<Placeholder name="Sorties planifiées" />} />
+          <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
+          <Route path="/matching" element={<PrivateRoute><Matching /></PrivateRoute>} />
+          <Route path="/matches" element={<PrivateRoute><Matches /></PrivateRoute>} />
+          <Route path="/chat" element={<PrivateRoute><Chat /></PrivateRoute>} />
+          <Route path="/chat/:id" element={<PrivateRoute><ConversationView /></PrivateRoute>} />
         </Route>
       </Routes>
     </BrowserRouter>

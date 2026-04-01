@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { Film, Users, Menu, X, LogOut, User } from 'lucide-react'
+import { Film, Users, Heart, MessageCircle, Menu, X, LogOut, User } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
+import { chatApi } from '../services/api'
 
 export default function Navbar() {
   const { isAuthenticated, user, logout } = useAuthStore()
@@ -9,6 +10,15 @@ export default function Navbar() {
   const location = useLocation()
   const [menuOpen, setMenuOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [unread, setUnread] = useState(0)
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    const poll = () => chatApi.getUnreadCount().then(r => setUnread(r.data.unread_count)).catch(() => {})
+    poll()
+    const t = setInterval(poll, 30000)
+    return () => clearInterval(t)
+  }, [isAuthenticated])
 
   const handleLogout = async () => {
     await logout()
@@ -16,8 +26,10 @@ export default function Navbar() {
   }
 
   const navLinks = [
-    { to: '/films', label: 'Films', icon: Film },
-    { to: '/matching', label: 'Matching', icon: Users },
+    { to: '/films', label: 'Films', icon: Film, badge: 0 },
+    { to: '/matching', label: 'Matching', icon: Users, badge: 0 },
+    { to: '/matches', label: 'Matchs', icon: Heart, badge: 0 },
+    { to: '/chat', label: 'Messages', icon: MessageCircle, badge: unread },
   ]
 
   return (
@@ -32,17 +44,23 @@ export default function Navbar() {
 
         {/* Desktop nav */}
         <div className="hidden md:flex items-center gap-1">
-          {navLinks.map(({ to, label }) => (
+          {navLinks.map(({ to, label, badge }) => (
             <Link
               key={to}
               to={to}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`relative px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 location.pathname.startsWith(to)
                   ? 'text-white bg-white/10'
                   : 'text-[var(--text-muted)] hover:text-white hover:bg-white/5'
               }`}
             >
               {label}
+              {badge > 0 && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-xs flex items-center justify-center font-bold"
+                  style={{ background: 'var(--accent-red)', fontSize: '10px' }}>
+                  {badge > 9 ? '9+' : badge}
+                </span>
+              )}
             </Link>
           ))}
         </div>

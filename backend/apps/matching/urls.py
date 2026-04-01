@@ -1,5 +1,9 @@
 from django.urls import path
+from .views import CandidatesView, SwipeView, MatchListView, MatchDetailView
 
 urlpatterns = [
-    # Endpoints matching - à implémenter en Sprint 1/3
+    path('candidates/', CandidatesView.as_view(), name='matching-candidates'),
+    path('swipe/', SwipeView.as_view(), name='matching-swipe'),
+    path('matches/', MatchListView.as_view(), name='matching-matches'),
+    path('matches/<int:pk>/', MatchDetailView.as_view(), name='matching-match-detail'),
 ]

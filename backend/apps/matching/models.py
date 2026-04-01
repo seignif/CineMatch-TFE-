@@ -45,6 +45,8 @@ class Match(models.Model):
     )
     score_compatibilite = models.IntegerField(default=0)  # 0-100
     raisons_compatibilite = models.JSONField(default=list)
+    ai_generated_reasons = models.JSONField(default=list)
+    ai_match_message = models.TextField(blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
     created_at = models.DateTimeField(auto_now_add=True)
 

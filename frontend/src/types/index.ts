@@ -95,14 +95,65 @@ export interface Seance {
 // ---- Matching ----
 export type SwipeAction = 'like' | 'pass' | 'superlike'
 
+export interface CandidateProfile {
+  bio: string
+  profile_picture: string | null
+  mood: string
+  genre_preferences: Record<string, number>
+}
+
+export interface Candidate {
+  id: number
+  first_name: string
+  city: string
+  date_of_birth?: string | null
+  profile: CandidateProfile
+  score: number
+  reasons: string[]
+}
+
 export interface Match {
   id: number
-  user1: User
-  user2: User
+  other_user: {
+    id: number
+    first_name: string
+    city: string
+    profile: CandidateProfile
+  }
   score_compatibilite: number
   raisons_compatibilite: string[]
+  ai_generated_reasons: string[]
+  ai_match_message: string
   status: 'active' | 'blocked' | 'expired'
   created_at: string
+}
+
+// ---- Chat ----
+export interface ChatMessage {
+  id: number
+  sender_id: number
+  sender_name: string
+  content: string
+  is_read: boolean
+  created_at: string
+}
+
+export interface Conversation {
+  id: number
+  other_user: {
+    id: number
+    first_name: string
+    city: string
+    profile_picture: string | null
+  }
+  last_message: {
+    content: string
+    sender_name: string
+    created_at: string
+  } | null
+  unread_count: number
+  match_score: number
+  updated_at: string
 }
 
 // ---- API ----

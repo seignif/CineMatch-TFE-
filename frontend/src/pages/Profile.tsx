@@ -28,6 +28,7 @@ export default function Profile() {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [city, setCity] = useState('')
+  const [dateOfBirth, setDateOfBirth] = useState('')
   const [bio, setBio] = useState('')
   const [mood, setMood] = useState('')
   const [genrePrefs, setGenrePrefs] = useState<Record<string, number>>({})
@@ -37,6 +38,7 @@ export default function Profile() {
       setFirstName(user.first_name)
       setLastName(user.last_name)
       setCity(user.city || '')
+      setDateOfBirth(user.date_of_birth || '')
       setBio(user.profile?.bio || '')
       setMood(user.profile?.mood || '')
       setGenrePrefs(user.profile?.genre_preferences || {})
@@ -52,7 +54,7 @@ export default function Profile() {
     e.preventDefault()
     setLoading(true)
     try {
-      await usersApi.updateMe({ first_name: firstName, last_name: lastName, city })
+      await usersApi.updateMe({ first_name: firstName, last_name: lastName, city, date_of_birth: dateOfBirth || null })
       await fetchMe()
       showSuccess('Informations mises à jour !')
     } finally {
@@ -181,6 +183,11 @@ export default function Profile() {
             <label className="block text-sm font-medium text-[var(--text-muted)] mb-1.5">Ville</label>
             <input value={city} onChange={e => setCity(e.target.value)}
               placeholder="Bruxelles" className="input-field" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[var(--text-muted)] mb-1.5">Date de naissance</label>
+            <input type="date" value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)}
+              className="input-field" max={new Date().toISOString().split('T')[0]} />
           </div>
           <button type="submit" disabled={loading}
             className="btn-primary flex items-center gap-2 disabled:opacity-60">
