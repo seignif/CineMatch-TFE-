@@ -1,5 +1,6 @@
 import math
 import logging
+from datetime import date
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ MOOD_LABELS = {
 
 class MatchingAlgorithm:
     """
-    Score de compatibilité = 40% genres + 30% films + 20% ville + 10% mood
+    Score de compatibilité = 35% genres + 25% films + 20% ville + 10% âge + 10% mood
     """
 
     def calculate_compatibility(self, user1, user2) -> tuple[int, list[str]]:
@@ -32,16 +33,18 @@ class MatchingAlgorithm:
             list(profile2.films_signature.all()),
         )
         city_score = self._city_similarity(user1, user2)
+        age_score = self._age_similarity(user1, user2)
         mood_score = self._mood_similarity(profile1.mood, profile2.mood)
 
         total = (
-            genre_score * 0.40
-            + film_score * 0.30
+            genre_score * 0.35
+            + film_score * 0.25
             + city_score * 0.20
+            + age_score * 0.10
             + mood_score * 0.10
         )
 
-        reasons = self._generate_reasons(user1, user2, genre_score, film_score, mood_score)
+        reasons = self._generate_reasons(user1, user2, genre_score, film_score, mood_score, age_score)
         return int(total), reasons
 
     def _genre_similarity(self, prefs1: dict, prefs2: dict) -> float:
@@ -77,12 +80,24 @@ class MatchingAlgorithm:
             return 100.0 if c1 == c2 else 50.0
         return 25.0
 
+    def _age_similarity(self, user1, user2) -> float:
+        """Proximité d'âge : 100% si même âge, décroît de 5pts par an d'écart, 0% à 20 ans d'écart."""
+        dob1 = user1.date_of_birth
+        dob2 = user2.date_of_birth
+        if not dob1 or not dob2:
+            return 50.0  # neutre si l'un des deux n'a pas renseigné sa date de naissance
+        today = date.today()
+        age1 = (today - dob1).days / 365.25
+        age2 = (today - dob2).days / 365.25
+        diff = abs(age1 - age2)
+        return max(0.0, 100.0 - diff * 5)
+
     def _mood_similarity(self, mood1: str, mood2: str) -> float:
         if not mood1 or not mood2:
             return 50.0
         return 100.0 if mood1 == mood2 else 0.0
 
-    def _generate_reasons(self, user1, user2, genre_score, film_score, mood_score) -> list[str]:
+    def _generate_reasons(self, user1, user2, genre_score, film_score, mood_score, age_score=50) -> list[str]:
         reasons = []
         p1 = user1.profile
         p2 = user2.profile
@@ -109,6 +124,16 @@ class MatchingAlgorithm:
         c2 = (user2.city or '').strip()
         if c1 and c1.lower() == (c2 or '').lower():
             reasons.append(f"Même ville : {c1}")
+
+        if age_score >= 80 and user1.date_of_birth and user2.date_of_birth:
+            today = date.today()
+            age1 = int((today - user1.date_of_birth).days / 365.25)
+            age2 = int((today - user2.date_of_birth).days / 365.25)
+            diff = abs(age1 - age2)
+            if diff == 0:
+                reasons.append("Même âge")
+            else:
+                reasons.append(f"Même génération ({diff} an{'s' if diff > 1 else ''} d'écart)")
 
         if not reasons:
             reasons.append("Profils complémentaires")

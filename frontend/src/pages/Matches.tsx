@@ -90,7 +90,7 @@ export default function Matches() {
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-2xl font-bold"
                       style={{ background: 'var(--bg-card)', color: 'var(--accent-red)' }}>
-                      {other.first_name[0].toUpperCase()}
+                      {other.first_name?.[0]?.toUpperCase() ?? '?'}
                     </div>
                   )}
                 </div>
@@ -128,6 +128,13 @@ export default function Matches() {
                         </li>
                       ))}
                     </ul>
+                  )}
+
+                  {match.ai_match_message && (
+                    <p className="mt-2 text-xs italic leading-relaxed px-3 py-2 rounded-lg"
+                      style={{ background: 'rgba(230,57,70,0.08)', color: 'var(--text-muted)', border: '1px solid rgba(230,57,70,0.15)' }}>
+                      {match.ai_match_message}
+                    </p>
                   )}
 
                   <button

@@ -1,11 +1,11 @@
 from urllib.parse import parse_qs
 from channels.middleware import BaseMiddleware
 from channels.db import database_sync_to_async
-from django.contrib.auth.models import AnonymousUser
 
 
 @database_sync_to_async
 def get_user_from_token(token_key):
+    from django.contrib.auth.models import AnonymousUser
     try:
         from rest_framework_simplejwt.tokens import AccessToken
         from django.contrib.auth import get_user_model
@@ -18,6 +18,7 @@ def get_user_from_token(token_key):
 
 class JwtAuthMiddleware(BaseMiddleware):
     async def __call__(self, scope, receive, send):
+        from django.contrib.auth.models import AnonymousUser
         query_string = scope.get('query_string', b'').decode()
         params = parse_qs(query_string)
         token = params.get('token', [None])[0]

@@ -124,6 +124,9 @@ export default function Matching() {
   if (candidates.length === 0 || currentIndex < 0) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center text-center px-4">
+        {matchResult && (
+          <MatchModal match={matchResult} onClose={() => setMatchResult(null)} />
+        )}
         <div className="text-6xl mb-4">🎬</div>
         <h2 className="font-display text-3xl tracking-wider text-white mb-2">C&apos;EST TOUT !</h2>
         <p className="text-[var(--text-muted)] text-sm">
@@ -161,13 +164,13 @@ export default function Matching() {
                 <div className="w-full rounded-2xl overflow-hidden select-none cursor-grab"
                   style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.08)' }}>
                   <div className="h-72 relative">
-                    {c.profile.profile_picture ? (
+                    {c.profile?.profile_picture ? (
                       <img src={c.profile.profile_picture} alt={c.first_name}
                         className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-7xl font-bold"
                         style={{ background: 'var(--bg-secondary)', color: 'var(--accent-red)' }}>
-                        {c.first_name[0].toUpperCase()}
+                        {c.first_name?.[0]?.toUpperCase() ?? '?'}
                       </div>
                     )}
                     <div className="absolute top-3 right-3 px-3 py-1 rounded-full text-sm font-bold"
@@ -185,7 +188,7 @@ export default function Matching() {
                       </div>
                     )}
                     <ScoreBar score={c.score} />
-                    {c.profile.mood && (
+                    {c.profile?.mood && (
                       <p className="text-xs mt-2" style={{ color: 'var(--accent-gold)' }}>
                         {MOOD_LABELS[c.profile.mood] || c.profile.mood}
                       </p>

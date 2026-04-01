@@ -43,3 +43,4 @@ pytest-cov==6.0.0
 
 # Dev
 django-extensions==3.2.3
+whitenoise>=6.0.0

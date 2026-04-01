@@ -12,6 +12,7 @@ class ConversationListView(generics.ListAPIView):
     """GET /api/chat/conversations/ — US-028"""
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = ConversationSerializer
+    pagination_class = None
 
     def get_queryset(self):
         user = self.request.user
@@ -41,6 +42,7 @@ class MessageListView(generics.ListAPIView):
     """GET /api/chat/conversations/<id>/messages/ — US-028"""
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = MessageSerializer
+    pagination_class = None
 
     def get_queryset(self):
         user = self.request.user
