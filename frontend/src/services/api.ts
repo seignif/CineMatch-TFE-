@@ -80,4 +80,21 @@ export const usersApi = {
   },
 }
 
+export const matchingApi = {
+  getCandidates: () => api.get('/matching/candidates/'),
+  swipe: (to_user_id: number, action: 'like' | 'pass' | 'superlike') =>
+    api.post('/matching/swipe/', { to_user_id, action }),
+  getMatches: () => api.get('/matching/matches/'),
+  getMatch: (id: number) => api.get(`/matching/matches/${id}/`),
+}
+
+export const chatApi = {
+  getConversations: () => api.get('/chat/conversations/'),
+  createConversation: (match_id: number) =>
+    api.post('/chat/conversations/create/', { match_id }),
+  getMessages: (conv_id: number) =>
+    api.get(`/chat/conversations/${conv_id}/messages/`),
+  getUnreadCount: () => api.get('/chat/unread/'),
+}
+
 export default api
