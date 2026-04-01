@@ -137,10 +137,11 @@ class TMDbService:
             return 0
         count = 0
         for g in data.get('genres', []):
-            _, created = Genre.objects.update_or_create(
-                tmdb_id=g['id'],
-                defaults={'name': g['name']},
-            )
+            # Lookup par nom (les genres Kinepolis ont tmdb_id=NULL)
+            obj, created = Genre.objects.get_or_create(name=g['name'])
+            if obj.tmdb_id != g['id']:
+                obj.tmdb_id = g['id']
+                obj.save(update_fields=['tmdb_id'])
             if created:
                 count += 1
         logger.info(f"[TMDb] Genres: {count} nouveaux synchronises")
