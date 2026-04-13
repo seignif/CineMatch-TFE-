@@ -1,6 +1,7 @@
 import logging
 from django.db.models import Q
-from rest_framework import status
+from django.utils import timezone
+from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -8,8 +9,11 @@ from rest_framework.views import APIView
 from apps.users.models import User
 from .algorithm import MatchingAlgorithm
 from .ai_service import MatchingAIService
-from .models import Swipe, Match
-from .serializers import CandidateSerializer, MatchSerializer, SwipeSerializer
+from .models import Swipe, Match, PlannedOuting
+from .serializers import (
+    CandidateSerializer, MatchSerializer, SwipeSerializer,
+    PlannedOutingSerializer,
+)
 
 logger = logging.getLogger(__name__)
 algorithm = MatchingAlgorithm()
@@ -147,3 +151,166 @@ class MatchDetailView(APIView):
         except Match.DoesNotExist:
             return Response({'detail': 'Match introuvable.'}, status=404)
         return Response(MatchSerializer(match, context={'request': request}).data)
+
+
+# ---------------------------------------------------------------------------
+# Sorties planifiées (US-029 à US-033)
+# ---------------------------------------------------------------------------
+
+def _outing_qs(user):
+    """Queryset de base : sorties où l'utilisateur est participant."""
+    return (
+        PlannedOuting.objects
+        .filter(Q(proposer=user) | Q(match__user1=user) | Q(match__user2=user))
+        .select_related(
+            'seance__film', 'seance__cinema',
+            'proposer__profile',
+            'match__user1__profile', 'match__user2__profile',
+        )
+        .distinct()
+    )
+
+
+class OutingListCreateView(generics.ListCreateAPIView):
+    """
+    GET  /api/matching/outings/  — mes sorties
+    POST /api/matching/outings/  — proposer une sortie à un match
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = PlannedOutingSerializer
+
+    def get_queryset(self):
+        return _outing_qs(self.request.user).order_by('-created_at')
+
+    def perform_create(self, serializer):
+        from rest_framework.exceptions import ValidationError
+        from apps.films.models import Seance
+
+        user = self.request.user
+        match_id = self.request.data.get('match')
+        seance_id = self.request.data.get('seance_id')
+
+        match = Match.objects.filter(
+            id=match_id, status='active'
+        ).filter(Q(user1=user) | Q(user2=user)).first()
+        if not match:
+            raise ValidationError({'match': 'Match introuvable ou non autorisé.'})
+
+        seance = Seance.objects.filter(id=seance_id).first() if seance_id else None
+
+        serializer.save(proposer=user, match=match, seance=seance, status='proposed')
+
+
+class OutingDetailView(generics.RetrieveAPIView):
+    """GET /api/matching/outings/<id>/"""
+    permission_classes = [IsAuthenticated]
+    serializer_class = PlannedOutingSerializer
+
+    def get_queryset(self):
+        return _outing_qs(self.request.user)
+
+
+class OutingConfirmView(APIView):
+    """
+    PUT /api/matching/outings/<id>/confirm/
+    Body: {"action": "confirm"} ou {"action": "refuse"}
+    Seul le partenaire (non-proposer) peut confirmer/refuser.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, pk):
+        user = request.user
+        action = request.data.get('action')
+
+        if action not in ('confirm', 'refuse'):
+            return Response(
+                {'error': 'Action invalide : confirm ou refuse.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        outing = _outing_qs(user).filter(id=pk, status='proposed').first()
+        if not outing:
+            return Response(
+                {'error': 'Sortie introuvable ou déjà traitée.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if outing.proposer == user:
+            return Response(
+                {'error': 'Vous ne pouvez pas confirmer votre propre proposition.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        outing.status = 'confirmed' if action == 'confirm' else 'cancelled'
+        outing.save(update_fields=['status', 'updated_at'])
+
+        msg = 'Sortie confirmée !' if action == 'confirm' else 'Sortie refusée.'
+        return Response({
+            'message': msg,
+            'outing': PlannedOutingSerializer(outing, context={'request': request}).data,
+        })
+
+
+class OutingCancelView(APIView):
+    """PUT /api/matching/outings/<id>/cancel/ — n'importe quel participant peut annuler."""
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, pk):
+        user = request.user
+        outing = _outing_qs(user).filter(
+            id=pk, status__in=['proposed', 'confirmed']
+        ).first()
+
+        if not outing:
+            return Response(
+                {'error': 'Sortie introuvable ou déjà terminée.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        outing.status = 'cancelled'
+        outing.save(update_fields=['status', 'updated_at'])
+
+        return Response({
+            'message': 'Sortie annulée.',
+            'outing': PlannedOutingSerializer(outing, context={'request': request}).data,
+        })
+
+
+class OutingMarkBookedView(APIView):
+    """PUT /api/matching/outings/<id>/booked/ — marquer billet réservé (US-032)."""
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, pk):
+        user = request.user
+        outing = _outing_qs(user).filter(id=pk, status='confirmed').first()
+
+        if not outing:
+            return Response(
+                {'error': 'Sortie introuvable ou non confirmée.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if outing.proposer == user:
+            outing.proposer_booked = True
+        else:
+            outing.partner_booked = True
+        outing.save(update_fields=['proposer_booked', 'partner_booked', 'updated_at'])
+
+        both = outing.proposer_booked and outing.partner_booked
+        return Response({
+            'message': 'Super ! Vous avez tous les deux réservé !' if both else 'Billet marqué comme réservé !',
+            'both_booked': both,
+            'outing': PlannedOutingSerializer(outing, context={'request': request}).data,
+        })
+
+
+class UpcomingOutingsView(generics.ListAPIView):
+    """GET /api/matching/outings/upcoming/ — sorties confirmées à venir (US-033 badges)."""
+    permission_classes = [IsAuthenticated]
+    serializer_class = PlannedOutingSerializer
+
+    def get_queryset(self):
+        return _outing_qs(self.request.user).filter(
+            status='confirmed',
+            seance__showtime__gt=timezone.now(),
+        ).order_by('seance__showtime')
