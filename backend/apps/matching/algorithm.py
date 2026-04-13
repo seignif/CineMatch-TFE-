@@ -97,6 +97,24 @@ class MatchingAlgorithm:
             return 50.0
         return 100.0 if mood1 == mood2 else 0.0
 
+    # ------------------------------------------------------------------
+    # Public aliases (pour la rétrocompatibilité des tests)
+    # ------------------------------------------------------------------
+
+    def calculate_genre_similarity(self, prefs1: dict, prefs2: dict) -> float:
+        return self._genre_similarity(prefs1, prefs2)
+
+    def calculate_film_similarity(self, films1: list, films2: list) -> float:
+        return self._film_similarity(films1, films2)
+
+    def calculate_availability_overlap(self, user1, user2) -> float:
+        return 50.0
+
+    def generate_compatibility_reasons(self, user1, user2, genre_score, film_score, mood_score) -> list[str]:
+        return self._generate_reasons(user1, user2, genre_score, film_score, mood_score)
+
+    # ------------------------------------------------------------------
+
     def _generate_reasons(self, user1, user2, genre_score, film_score, mood_score, age_score=50) -> list[str]:
         reasons = []
         p1 = user1.profile
