@@ -9,9 +9,19 @@ app.autodiscover_tasks()
 
 # Tâches périodiques
 app.conf.beat_schedule = {
-    'sync-belgian-data-daily': {
-        'task': 'apps.films.tasks.sync_all_belgian_data',
-        'schedule': 18000.0,  # Toutes les 5h (en secondes)
+    'sync-kinepolis-every-5h': {
+        'task': 'apps.films.tasks.sync_kinepolis_all',
+        'schedule': 18000.0,  # Toutes les 5h
+        'options': {'expires': 3600},
+    },
+    'enrich-tmdb-daily': {
+        'task': 'apps.films.tasks.enrich_tmdb_films',
+        'schedule': 86400.0,  # Quotidien (24h)
+        'options': {'expires': 3600},
+    },
+    'cleanup-seances-daily': {
+        'task': 'apps.films.tasks.cleanup_old_seances',
+        'schedule': 86400.0,  # Quotidien (24h)
         'options': {'expires': 3600},
     },
 }

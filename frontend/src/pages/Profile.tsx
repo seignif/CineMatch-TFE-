@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
-import { Camera, Save, Eye, User } from 'lucide-react'
+import { Camera, Save, Eye, User, MapPin } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { usersApi } from '../services/api'
 
 const MOOD_OPTIONS = [
-  { value: 'rire', label: '😄 Envie de rire' },
-  { value: 'reflechir', label: '🤔 Besoin de réfléchir' },
-  { value: 'emu', label: '🥺 Envie d\'être ému' },
-  { value: 'adrenaline', label: '⚡ Besoin d\'adrénaline' },
+  { value: 'rire', label: 'Envie de rire' },
+  { value: 'reflechir', label: 'Besoin de réfléchir' },
+  { value: 'emu', label: "Envie d'être ému" },
+  { value: 'adrenaline', label: "Besoin d'adrénaline" },
 ]
 
 const GENRE_OPTIONS = [
@@ -130,7 +130,7 @@ export default function Profile() {
         <div>
           <h1 className="text-2xl font-semibold text-white">{user.first_name} {user.last_name}</h1>
           <p className="text-[var(--text-muted)] text-sm">{user.email}</p>
-          {user.city && <p className="text-[var(--text-muted)] text-sm">📍 {user.city}</p>}
+          {user.city && <p className="text-[var(--text-muted)] text-sm flex items-center gap-1"><MapPin size={12} />{user.city}</p>}
         </div>
       </div>
 
@@ -299,7 +299,7 @@ export default function Profile() {
                   ? Math.floor((Date.now() - new Date(user.date_of_birth).getTime()) / (365.25 * 24 * 3600 * 1000))
                   : '??'
               } ans</h3>
-              {user.city && <p className="text-[var(--text-muted)] text-sm">📍 {user.city}</p>}
+              {user.city && <p className="text-[var(--text-muted)] text-sm flex items-center gap-1"><MapPin size={12} />{user.city}</p>}
               {user.profile?.mood && (
                 <p className="text-sm mt-0.5" style={{ color: 'var(--accent-gold)' }}>
                   {MOOD_OPTIONS.find(m => m.value === user.profile.mood)?.label}

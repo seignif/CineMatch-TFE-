@@ -1,162 +1,257 @@
-import requests
-import time
 import logging
+import time
+
+import requests
 from django.conf import settings
 from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
 
 CACHE_TTL = 86400  # 24h
+IMAGE_SIZE_POSTER = 'w500'
+IMAGE_SIZE_BACKDROP = 'w1280'
 
 
 class TMDbService:
-    """Service d'accès à l'API The Movie Database."""
+    """
+    Service d'enrichissement des films Kinepolis via l'API TMDb.
+    Stratégie : cherche d'abord via IMDb code, puis via titre.
+    """
 
-    BASE_URL = settings.TMDB_BASE_URL
-    IMAGE_BASE_URL = settings.TMDB_IMAGE_BASE_URL
-    RATE_LIMIT_DELAY = 0.25  # 40 req/10s → 1 req/0.25s
+    RATE_LIMIT_DELAY = 0.28  # ~40 req/10s
 
     def __init__(self):
         self.api_key = settings.TMDB_API_KEY
         if not self.api_key:
             raise ValueError("TMDB_API_KEY non configurée dans .env")
+        self.base_url = settings.TMDB_BASE_URL
+        self.image_base_url = settings.TMDB_IMAGE_BASE_URL
         self.session = requests.Session()
         self.session.params = {'api_key': self.api_key, 'language': 'fr-BE'}
 
-    def _get(self, endpoint, params=None, cache_key=None, cache_ttl=CACHE_TTL):
+    # ------------------------------------------------------------------
+    # HTTP helpers
+    # ------------------------------------------------------------------
+
+    def _get(self, endpoint, extra_params=None, cache_key=None):
         if cache_key:
             cached = cache.get(cache_key)
-            if cached:
+            if cached is not None:
                 return cached
 
         time.sleep(self.RATE_LIMIT_DELAY)
-        url = f"{self.BASE_URL}{endpoint}"
         try:
-            resp = self.session.get(url, params=params, timeout=10)
+            resp = self.session.get(
+                f"{self.base_url}{endpoint}",
+                params=extra_params or {},
+                timeout=10,
+            )
             resp.raise_for_status()
             data = resp.json()
             if cache_key:
-                cache.set(cache_key, data, cache_ttl)
+                cache.set(cache_key, data, CACHE_TTL)
             return data
         except requests.RequestException as e:
-            logger.error(f"TMDb API error [{endpoint}]: {e}")
+            logger.error(f"[TMDb] Erreur {endpoint}: {e}")
             return None
 
-    def get_now_playing(self, region='BE', page=1):
-        """Films actuellement en salle en Belgique."""
-        cache_key = f'tmdb_now_playing_{region}_p{page}'
-        return self._get(
-            '/movie/now_playing',
-            params={'region': region, 'page': page},
+    # ------------------------------------------------------------------
+    # Lookup methods
+    # ------------------------------------------------------------------
+
+    def find_by_imdb(self, imdb_code: str):
+        """Cherche un film TMDb via son code IMDb (ex: 'tt1234567')."""
+        cache_key = f'tmdb_find_imdb_{imdb_code}'
+        data = self._get(
+            f'/find/{imdb_code}',
+            extra_params={'external_source': 'imdb_id'},
             cache_key=cache_key,
         )
+        if data and data.get('movie_results'):
+            return data['movie_results'][0]
+        return None
 
-    def get_movie_details(self, tmdb_id):
-        """Détails complets d'un film (avec videos)."""
-        cache_key = f'tmdb_movie_{tmdb_id}'
+    def search_by_title(self, title: str, year=None):
+        """Cherche un film TMDb par titre (retourne le premier résultat)."""
+        params = {'query': title}
+        if year:
+            params['year'] = year
+        cache_key = f'tmdb_search_{title}_{year}'
+        data = self._get('/search/movie', extra_params=params, cache_key=cache_key)
+        if data and data.get('results'):
+            return data['results'][0]
+        return None
+
+    def get_details(self, tmdb_id: int):
+        """Récupère les détails complets + videos d'un film TMDb."""
+        cache_key = f'tmdb_details_{tmdb_id}'
         return self._get(
             f'/movie/{tmdb_id}',
-            params={'append_to_response': 'videos,credits'},
+            extra_params={'append_to_response': 'videos'},
             cache_key=cache_key,
         )
 
-    def get_genres(self):
-        """Liste des genres TMDb."""
-        cache_key = 'tmdb_genres'
-        return self._get('/genre/movie/list', cache_key=cache_key, cache_ttl=604800)  # 7j
+    # ------------------------------------------------------------------
+    # Image URL helpers
+    # ------------------------------------------------------------------
 
-    def sync_now_playing_movies(self, region='BE'):
-        """Synchronise les films en salle depuis TMDb."""
-        from apps.films.models import Film, Genre
+    def _build_image_url(self, path: str, size: str) -> str:
+        if not path:
+            return ''
+        base = self.image_base_url.rstrip('/')
+        # Replace any size suffix with the desired one
+        import re
+        base = re.sub(r'/w\d+$|/original$', f'/{size}', base)
+        return f"{base}{path}"
 
-        logger.info(f"[TMDb] Synchronisation films en salle (region={region})")
-        synced_count = 0
+    def make_poster_url(self, path: str) -> str:
+        return self._build_image_url(path, IMAGE_SIZE_POSTER)
 
-        # Sync genres d'abord
-        genres_data = self.get_genres()
-        if genres_data:
-            for g in genres_data.get('genres', []):
-                Genre.objects.update_or_create(
-                    tmdb_id=g['id'],
-                    defaults={'nom': g['name']},
-                )
+    def make_backdrop_url(self, path: str) -> str:
+        return self._build_image_url(path, IMAGE_SIZE_BACKDROP)
 
-        # Récupérer toutes les pages de films
-        page = 1
-        while True:
-            data = self.get_now_playing(region=region, page=page)
-            if not data or not data.get('results'):
-                break
+    # ------------------------------------------------------------------
+    # Trailer extraction
+    # ------------------------------------------------------------------
 
-            for movie_data in data['results']:
-                film = self._upsert_film(movie_data)
-                if film:
-                    synced_count += 1
+    def _extract_trailer_key(self, details: dict) -> str:
+        videos = details.get('videos', {}).get('results', [])
+        # Prefer FR trailer, then any language
+        for lang in ('fr', None):
+            for v in videos:
+                if v.get('type') == 'Trailer' and v.get('site') == 'YouTube':
+                    if lang is None or v.get('iso_639_1') == lang:
+                        return v['key']
+        return ''
 
-            if page >= data.get('total_pages', 1) or page >= 5:  # max 5 pages
-                break
-            page += 1
+    # ------------------------------------------------------------------
+    # Genre sync
+    # ------------------------------------------------------------------
 
-        # Marquer les films qui ne sont plus en salle
-        tmdb_ids_now_playing = self._get_all_now_playing_ids(region)
-        Film.objects.exclude(tmdb_id__in=tmdb_ids_now_playing).update(is_now_playing=False)
+    def sync_genres(self) -> int:
+        """Synchronise les genres TMDb vers la base de données."""
+        from apps.films.models import Genre
 
-        logger.info(f"[TMDb] {synced_count} films synchronisés")
-        return synced_count
+        data = self._get('/genre/movie/list', cache_key='tmdb_genres_list')
+        if not data:
+            return 0
+        count = 0
+        for g in data.get('genres', []):
+            # Lookup par nom (les genres Kinepolis ont tmdb_id=NULL)
+            obj, created = Genre.objects.get_or_create(name=g['name'])
+            if obj.tmdb_id != g['id']:
+                obj.tmdb_id = g['id']
+                obj.save(update_fields=['tmdb_id'])
+            if created:
+                count += 1
+        logger.info(f"[TMDb] Genres: {count} nouveaux synchronises")
+        return count
 
-    def _upsert_film(self, movie_data):
-        """Crée ou met à jour un film depuis les données TMDb."""
-        from apps.films.models import Film, Genre
+    # ------------------------------------------------------------------
+    # Film enrichment
+    # ------------------------------------------------------------------
 
-        tmdb_id = movie_data.get('id')
+    def enrich_film(self, film) -> bool:
+        """
+        Enrichit un film Kinepolis avec les données TMDb.
+        Retourne True si le film a été enrichi avec succès.
+        """
+        from apps.films.models import Genre
+
+        # 1. Find TMDb entry
+        tmdb_data = None
+        if film.imdb_code:
+            tmdb_data = self.find_by_imdb(film.imdb_code)
+
+        if not tmdb_data:
+            year = film.release_date.year if film.release_date else None
+            tmdb_data = self.search_by_title(film.title, year=year)
+
+        if not tmdb_data:
+            logger.debug(f"[TMDb] Film non trouve: {film.title}")
+            return False
+
+        tmdb_id = tmdb_data.get('id')
         if not tmdb_id:
-            return None
+            return False
 
-        # Récupérer la clé YouTube du trailer
-        trailer_key = ''
-        details = self.get_movie_details(tmdb_id)
-        if details:
-            videos = details.get('videos', {}).get('results', [])
-            trailers = [v for v in videos if v.get('type') == 'Trailer' and v.get('site') == 'YouTube']
-            if trailers:
-                trailer_key = trailers[0]['key']
+        # 2. Get full details (with videos)
+        details = self.get_details(tmdb_id)
+        if not details:
+            return False
 
-        poster_path = movie_data.get('poster_path', '')
-        backdrop_path = movie_data.get('backdrop_path', '')
+        # 3. Build update dict
+        poster_path = details.get('poster_path') or tmdb_data.get('poster_path', '')
+        backdrop_path = details.get('backdrop_path') or tmdb_data.get('backdrop_path', '')
+        vote_average = details.get('vote_average') or tmdb_data.get('vote_average')
 
-        film, _ = Film.objects.update_or_create(
-            tmdb_id=tmdb_id,
-            defaults={
-                'titre': movie_data.get('title', ''),
-                'titre_original': movie_data.get('original_title', ''),
-                'synopsis': movie_data.get('overview', ''),
-                'poster': f"{self.IMAGE_BASE_URL}{poster_path}" if poster_path else '',
-                'backdrop': f"{self.IMAGE_BASE_URL}{backdrop_path}" if backdrop_path else '',
-                'trailer_youtube_key': trailer_key,
-                'duree': details.get('runtime') if details else None,
-                'date_sortie': movie_data.get('release_date') or None,
-                'note': movie_data.get('vote_average'),
-                'vote_count': movie_data.get('vote_count', 0),
-                'is_now_playing': True,
-            },
+        # Si un autre film a déjà ce tmdb_id, on n'écrase pas la clé unique
+        from apps.films.models import Film as FilmModel
+        tmdb_id_already_used = FilmModel.objects.filter(
+            tmdb_id=tmdb_id
+        ).exclude(pk=film.pk).exists()
+
+        updates = {
+            'trailer_youtube_key': self._extract_trailer_key(details),
+        }
+        if not tmdb_id_already_used:
+            updates['tmdb_id'] = tmdb_id
+
+        if poster_path:
+            updates['poster_url'] = self.make_poster_url(poster_path)
+        if backdrop_path:
+            updates['backdrop_url'] = self.make_backdrop_url(backdrop_path)
+        if vote_average:
+            updates['tmdb_rating'] = round(float(vote_average), 1)
+
+        # Fill synopsis if missing
+        if not film.synopsis and details.get('overview'):
+            updates['synopsis'] = details['overview']
+
+        for field, value in updates.items():
+            setattr(film, field, value)
+        film.save(update_fields=list(updates.keys()))
+
+        # 4. Sync genres
+        tmdb_genre_ids = [g['id'] for g in details.get('genres', [])]
+        if tmdb_genre_ids:
+            genres = Genre.objects.filter(tmdb_id__in=tmdb_genre_ids)
+            if genres.exists():
+                film.genres.set(genres)
+
+        logger.debug(f"[TMDb] Enrichi: {film.title} (tmdb_id={tmdb_id})")
+        return True
+
+    # ------------------------------------------------------------------
+    # Bulk enrichment
+    # ------------------------------------------------------------------
+
+    def enrich_all(self, force: bool = False) -> dict:
+        """
+        Enrichit tous les films qui n'ont pas encore de tmdb_id.
+        Si force=True, re-enrichit tous les films.
+        """
+        from apps.films.models import Film
+
+        qs = Film.objects.all() if force else Film.objects.filter(tmdb_id__isnull=True)
+        total = qs.count()
+        enriched = 0
+        failed = 0
+
+        logger.info(f"[TMDb] Enrichissement de {total} films (force={force})")
+
+        for film in qs.iterator():
+            try:
+                if self.enrich_film(film):
+                    enriched += 1
+                else:
+                    failed += 1
+            except Exception as e:
+                logger.warning(f"[TMDb] Erreur pour '{film.title}': {e}")
+                failed += 1
+
+        logger.info(
+            f"[TMDb] Enrichissement termine: {enriched} reussis, "
+            f"{failed} echoues sur {total}"
         )
-
-        # Genres
-        genre_ids = movie_data.get('genre_ids', [])
-        genres = Genre.objects.filter(tmdb_id__in=genre_ids)
-        film.genres.set(genres)
-
-        return film
-
-    def _get_all_now_playing_ids(self, region='BE'):
-        ids = []
-        page = 1
-        while page <= 10:
-            data = self.get_now_playing(region=region, page=page)
-            if not data or not data.get('results'):
-                break
-            ids.extend([m['id'] for m in data['results']])
-            if page >= data.get('total_pages', 1):
-                break
-            page += 1
-        return ids
+        return {'total': total, 'enriched': enriched, 'failed': failed}
