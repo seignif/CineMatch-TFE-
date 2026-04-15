@@ -57,6 +57,9 @@ class Match(models.Model):
     def __str__(self):
         return f"Match {self.user1} ↔ {self.user2} ({self.score_compatibilite}%)"
 
+    def get_other_user(self, user):
+        return self.user2 if self.user1 == user else self.user1
+
 
 class PlannedOuting(models.Model):
     STATUS_CHOICES = [
@@ -67,7 +70,13 @@ class PlannedOuting(models.Model):
     ]
 
     match = models.ForeignKey(Match, on_delete=models.CASCADE, related_name='outings')
-    seance = models.ForeignKey('films.Seance', on_delete=models.CASCADE)
+    seance = models.ForeignKey(
+        'films.Seance',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='outings',
+    )
     proposer = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -78,10 +87,26 @@ class PlannedOuting(models.Model):
     meeting_time = models.DateTimeField(null=True, blank=True)
     proposer_booked = models.BooleanField(default=False)
     partner_booked = models.BooleanField(default=False)
+    proposal_message = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'matching_planned_outing'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        film = self.seance.film.title if self.seance else 'film inconnu'
+        return f"Sortie {self.match} — {self.status} ({film})"
+
+    def get_partner(self):
+        return self.match.get_other_user(self.proposer)
+
+    def is_upcoming(self):
+        from django.utils import timezone
+        if self.seance and self.seance.showtime:
+            return self.seance.showtime > timezone.now()
+        return False
 
 
 class Review(models.Model):
