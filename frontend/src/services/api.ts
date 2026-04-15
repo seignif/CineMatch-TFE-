@@ -88,6 +88,23 @@ export const matchingApi = {
   getMatch: (id: number) => api.get(`/matching/matches/${id}/`),
 }
 
+export const outingsApi = {
+  getAll: () => api.get('/matching/outings/'),
+  getUpcoming: () => api.get('/matching/outings/upcoming/'),
+  getById: (id: number) => api.get(`/matching/outings/${id}/`),
+  create: (data: {
+    match: number
+    seance_id?: number | null
+    meeting_place?: string
+    meeting_time?: string
+    proposal_message?: string
+  }) => api.post('/matching/outings/', data),
+  confirm: (id: number) => api.put(`/matching/outings/${id}/confirm/`, { action: 'confirm' }),
+  refuse: (id: number) => api.put(`/matching/outings/${id}/confirm/`, { action: 'refuse' }),
+  cancel: (id: number) => api.put(`/matching/outings/${id}/cancel/`),
+  markBooked: (id: number) => api.put(`/matching/outings/${id}/booked/`),
+}
+
 export const chatApi = {
   getConversations: () => api.get('/chat/conversations/'),
   createConversation: (match_id: number) =>

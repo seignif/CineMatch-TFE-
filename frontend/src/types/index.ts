@@ -128,6 +128,46 @@ export interface Match {
   created_at: string
 }
 
+// ---- Outings ----
+export interface OutingSeance {
+  id: number
+  film_title: string
+  film_poster: string
+  cinema_name: string
+  cinema_kinepolis_id: string
+  showtime: string
+  language: string
+  hall: number | null
+  booking_url: string
+  is_sold_out: boolean
+  raw_attributes: string
+}
+
+export interface OutingUserInfo {
+  id: number
+  first_name: string
+  profile_picture: string | null
+}
+
+export interface PlannedOuting {
+  id: number
+  match: number
+  status: 'proposed' | 'confirmed' | 'completed' | 'cancelled'
+  seance: OutingSeance | null
+  seance_id?: number | null
+  proposer_info: OutingUserInfo
+  partner_info: OutingUserInfo
+  meeting_place: string
+  meeting_time: string | null
+  proposer_booked: boolean
+  partner_booked: boolean
+  proposal_message: string
+  is_upcoming: boolean
+  user_is_proposer: boolean
+  created_at: string
+  updated_at: string
+}
+
 // ---- Chat ----
 export interface ChatMessage {
   id: number

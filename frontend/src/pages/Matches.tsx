@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Heart, MessageCircle, MapPin } from 'lucide-react'
+import { Heart, MessageCircle, MapPin, Calendar } from 'lucide-react'
 import { matchingApi, chatApi } from '../services/api'
 import type { Match } from '../types'
+import ProposeOutingModal from '../components/ProposeOutingModal'
 
 const MOOD_LABELS: Record<string, string> = {
   rire: 'Envie de rire',
@@ -16,6 +17,7 @@ export default function Matches() {
   const [matches, setMatches] = useState<Match[]>([])
   const [loading, setLoading] = useState(true)
   const [openingChat, setOpeningChat] = useState<number | null>(null)
+  const [proposeMatch, setProposeMatch] = useState<Match | null>(null)
 
   useEffect(() => {
     matchingApi.getMatches()
@@ -137,23 +139,44 @@ export default function Matches() {
                     </p>
                   )}
 
-                  <button
-                    onClick={() => handleOpenChat(match)}
-                    disabled={openingChat === match.id}
-                    className="mt-3 flex items-center gap-2 btn-primary text-sm px-4 py-2 disabled:opacity-60"
-                  >
-                    {openingChat === match.id ? (
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    ) : (
-                      <MessageCircle size={14} />
-                    )}
-                    Envoyer un message
-                  </button>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => handleOpenChat(match)}
+                      disabled={openingChat === match.id}
+                      className="flex items-center gap-2 btn-primary text-sm px-4 py-2 disabled:opacity-60"
+                    >
+                      {openingChat === match.id ? (
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <MessageCircle size={14} />
+                      )}
+                      Envoyer un message
+                    </button>
+                    <button
+                      onClick={() => setProposeMatch(match)}
+                      className="flex items-center gap-2 btn-secondary text-sm px-4 py-2"
+                    >
+                      <Calendar size={14} />
+                      Proposer une sortie
+                    </button>
+                  </div>
                 </div>
               </div>
             )
           })}
         </div>
+      )}
+
+      {proposeMatch && (
+        <ProposeOutingModal
+          matchId={proposeMatch.id}
+          partnerName={proposeMatch.other_user.first_name}
+          onClose={() => setProposeMatch(null)}
+          onSuccess={() => {
+            setProposeMatch(null)
+            navigate('/outings')
+          }}
+        />
       )}
     </div>
   )
