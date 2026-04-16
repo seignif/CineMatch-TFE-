@@ -9,10 +9,10 @@ from rest_framework.views import APIView
 from apps.users.models import User
 from .algorithm import MatchingAlgorithm
 from .ai_service import MatchingAIService
-from .models import Swipe, Match, PlannedOuting
+from .models import Swipe, Match, PlannedOuting, Review
 from .serializers import (
     CandidateSerializer, MatchSerializer, SwipeSerializer,
-    PlannedOutingSerializer,
+    PlannedOutingSerializer, ReviewSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -314,3 +314,76 @@ class UpcomingOutingsView(generics.ListAPIView):
             status='confirmed',
             seance__showtime__gt=timezone.now(),
         ).order_by('seance__showtime')
+
+
+class OutingCompleteView(APIView):
+    """PUT /api/matching/outings/<id>/complete/ — marquer la sortie comme terminée."""
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, pk):
+        user = request.user
+        outing = _outing_qs(user).filter(id=pk, status='confirmed').first()
+
+        if not outing:
+            return Response(
+                {'error': 'Sortie introuvable ou non confirmée.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        outing.status = 'completed'
+        outing.save(update_fields=['status', 'updated_at'])
+        return Response({
+            'message': 'Sortie marquée comme terminée.',
+            'outing': PlannedOutingSerializer(outing, context={'request': request}).data,
+        })
+
+
+class ReviewCreateView(APIView):
+    """POST /api/matching/outings/<id>/review/ — laisser un avis post-sortie (US-038)."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        from apps.users.badge_service import BadgeService
+
+        user = request.user
+        outing = _outing_qs(user).filter(
+            id=pk, status__in=['completed', 'confirmed']
+        ).first()
+
+        if not outing:
+            return Response(
+                {'error': 'Sortie introuvable.'},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Empêcher de se noter soi-même
+        partner = outing.get_partner()
+        if partner == user:
+            return Response({'error': 'Invalide.'}, status=400)
+
+        # Vérifier qu'il n'y a pas déjà un avis de cet utilisateur
+        if Review.objects.filter(outing=outing, reviewer=user).exists():
+            return Response({'error': 'Vous avez déjà laissé un avis pour cette sortie.'}, status=400)
+
+        serializer = ReviewSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        review = serializer.save(
+            outing=outing,
+            reviewer=user,
+            reviewed=partner,
+        )
+
+        # Passer en completed si ce n'est pas déjà le cas
+        if outing.status != 'completed':
+            outing.status = 'completed'
+            outing.save(update_fields=['status', 'updated_at'])
+
+        # Vérifier et attribuer les badges
+        new_badges = BadgeService.check_and_award_badges(user)
+
+        return Response({
+            'review': ReviewSerializer(review).data,
+            'new_badges': new_badges,
+        }, status=status.HTTP_201_CREATED)

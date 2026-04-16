@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from apps.users.models import User, UserProfile
-from .models import Swipe, Match, PlannedOuting
+from .models import Swipe, Match, PlannedOuting, Review
 
 
 class PublicProfileSerializer(serializers.ModelSerializer):
@@ -117,3 +117,15 @@ class PlannedOutingSerializer(serializers.ModelSerializer):
     def get_user_is_proposer(self, obj):
         request = self.context.get('request')
         return bool(request and obj.proposer == request.user)
+
+
+class ReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Review
+        fields = ['id', 'outing', 'rating', 'would_go_again', 'comment', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+    def validate_rating(self, value):
+        if value not in range(1, 6):
+            raise serializers.ValidationError('La note doit être entre 1 et 5.')
+        return value

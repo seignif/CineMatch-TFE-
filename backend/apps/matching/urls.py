@@ -3,6 +3,7 @@ from .views import (
     CandidatesView, SwipeView, MatchListView, MatchDetailView,
     OutingListCreateView, OutingDetailView, OutingConfirmView,
     OutingCancelView, OutingMarkBookedView, UpcomingOutingsView,
+    OutingCompleteView, ReviewCreateView,
 )
 
 urlpatterns = [
@@ -19,4 +20,8 @@ urlpatterns = [
     path('outings/<int:pk>/confirm/', OutingConfirmView.as_view(), name='outing-confirm'),
     path('outings/<int:pk>/cancel/', OutingCancelView.as_view(), name='outing-cancel'),
     path('outings/<int:pk>/booked/', OutingMarkBookedView.as_view(), name='outing-booked'),
+
+    # Avis + statut terminé (US-038)
+    path('outings/<int:pk>/complete/', OutingCompleteView.as_view(), name='outing-complete'),
+    path('outings/<int:pk>/review/', ReviewCreateView.as_view(), name='outing-review'),
 ]
