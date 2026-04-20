@@ -99,6 +99,16 @@ class KinepolisService:
 
         films_count = sum(self._sync_film(fd, cdn_base) for fd in all_films.values())
 
+        # Retirer les films qui ne sont plus dans le feed Kinepolis
+        from apps.films.models import Film
+        retired = Film.objects.exclude(
+            kinepolis_id__startswith='tmdb_'
+        ).exclude(
+            kinepolis_id__in=set(all_films.keys())
+        ).update(is_future=True)
+        if retired:
+            logger.info(f"[Kinepolis] {retired} films retires de l'affiche (plus dans le feed)")
+
         # Sessions (current + future)
         all_sessions = []
         for section in ("current_movies", "future_movies"):
