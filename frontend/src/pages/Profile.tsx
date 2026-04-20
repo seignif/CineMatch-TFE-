@@ -423,6 +423,25 @@ export default function Profile() {
             </div>
           )}
 
+          {filmsSignature.length > 0 && (
+            <div className="mb-4">
+              <p className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-2">Films signature</p>
+              <div className="flex flex-wrap gap-2">
+                {filmsSignature.map(f => (
+                  <div key={f.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    {f.poster_url
+                      ? <img src={f.poster_url} alt={f.title} className="w-6 h-9 object-cover rounded" />
+                      : <div className="w-6 h-9 rounded flex items-center justify-center text-[10px]"
+                          style={{ background: 'rgba(255,255,255,0.05)' }}>?</div>
+                    }
+                    <span className="text-xs text-white">{f.title}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <p className="text-xs text-[var(--text-muted)] italic">
             C'est ainsi que les autres utilisateurs voient ton profil. Email et mot de passe ne sont jamais affichés.
           </p>
