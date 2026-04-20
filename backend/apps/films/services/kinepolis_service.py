@@ -144,6 +144,11 @@ class KinepolisService:
                 dt = tz.make_aware(dt)
             release_date = dt
 
+        existing = Film.objects.filter(kinepolis_id=film_id).only('poster_url', 'backdrop_url').first()
+        # Ne pas ecraser les posters/backdrops deja enrichis par TMDb
+        final_poster = poster_url if not (existing and existing.poster_url) else existing.poster_url
+        final_backdrop = backdrop_url if not (existing and existing.backdrop_url) else existing.backdrop_url
+
         film, _ = Film.objects.update_or_create(
             kinepolis_id=film_id,
             defaults={
@@ -157,8 +162,8 @@ class KinepolisService:
                 "language": film_data.get("language", "FR"),
                 "audio_language": film_data.get("audioLanguage", ""),
                 "is_future": film_data.get("showAsFutureRelease", False),
-                "poster_url": poster_url,
-                "backdrop_url": backdrop_url,
+                "poster_url": final_poster,
+                "backdrop_url": final_backdrop,
             },
         )
 
