@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Search, SlidersHorizontal, X, Sparkles } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { filmsApi, recommendationsApi } from '../services/api'
 import FilmCard from '../components/FilmCard'
 import type { Film, PaginatedResponse, FilmRecommendation } from '../types'
@@ -13,10 +13,11 @@ function SkeletonCard() {
 
 export default function Films() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [films, setFilms] = useState<Film[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [isFuture, setIsFuture] = useState(false)
+  const [isFuture, setIsFuture] = useState(searchParams.get('tab') === 'bientot')
   const [page, setPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [searchInput, setSearchInput] = useState('')
@@ -136,7 +137,7 @@ export default function Films() {
         {/* Toggle à l'affiche / prochainement */}
         <div className="flex items-center gap-1 glass rounded-lg p-1 shrink-0">
           <button
-            onClick={() => setIsFuture(false)}
+            onClick={() => { setIsFuture(false); setSearchParams({}) }}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               !isFuture ? 'bg-[var(--accent-red)] text-white' : 'text-[var(--text-muted)] hover:text-white'
             }`}
@@ -144,7 +145,7 @@ export default function Films() {
             À l'affiche
           </button>
           <button
-            onClick={() => setIsFuture(true)}
+            onClick={() => { setIsFuture(true); setSearchParams({ tab: 'bientot' }) }}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               isFuture ? 'bg-[var(--accent-red)] text-white' : 'text-[var(--text-muted)] hover:text-white'
             }`}

@@ -181,9 +181,10 @@ class TMDbService:
             return False
 
         # 3. Build update dict
-        poster_path = details.get('poster_path') or tmdb_data.get('poster_path', '')
-        backdrop_path = details.get('backdrop_path') or tmdb_data.get('backdrop_path', '')
-        vote_average = details.get('vote_average') or tmdb_data.get('vote_average')
+        fallback = tmdb_data or {}
+        poster_path = details.get('poster_path') or fallback.get('poster_path', '')
+        backdrop_path = details.get('backdrop_path') or fallback.get('backdrop_path', '')
+        vote_average = details.get('vote_average') or fallback.get('vote_average')
 
         # Si un autre film a déjà ce tmdb_id, on n'écrase pas la clé unique
         from apps.films.models import Film as FilmModel
@@ -236,9 +237,12 @@ class TMDbService:
         if force:
             qs = Film.objects.all()
         else:
-            # Films sans tmdb_id OU avec tmdb_id mais sans poster (poster perdu lors d'un sync)
             from django.db.models import Q
-            qs = Film.objects.filter(Q(tmdb_id__isnull=True) | Q(poster_url=''))
+            qs = Film.objects.filter(
+                Q(tmdb_id__isnull=True) |   # jamais enrichi
+                Q(poster_url='') |           # poster perdu
+                Q(tmdb_id__isnull=False, tmdb_rating__isnull=True)  # tmdb_id connu mais enrichissement incomplet
+            )
         total = qs.count()
         enriched = 0
         failed = 0
