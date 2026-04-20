@@ -233,7 +233,12 @@ class TMDbService:
         """
         from apps.films.models import Film
 
-        qs = Film.objects.all() if force else Film.objects.filter(tmdb_id__isnull=True)
+        if force:
+            qs = Film.objects.all()
+        else:
+            # Films sans tmdb_id OU avec tmdb_id mais sans poster (poster perdu lors d'un sync)
+            from django.db.models import Q
+            qs = Film.objects.filter(Q(tmdb_id__isnull=True) | Q(poster_url=''))
         total = qs.count()
         enriched = 0
         failed = 0
