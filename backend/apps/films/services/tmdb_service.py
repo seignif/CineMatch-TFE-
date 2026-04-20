@@ -158,22 +158,22 @@ class TMDbService:
         """
         from apps.films.models import Genre
 
-        # 1. Find TMDb entry
+        # 1. Find TMDb entry — utilise le tmdb_id existant si disponible
         tmdb_data = None
-        if film.imdb_code:
-            tmdb_data = self.find_by_imdb(film.imdb_code)
+        tmdb_id = film.tmdb_id
 
-        if not tmdb_data:
-            year = film.release_date.year if film.release_date else None
-            tmdb_data = self.search_by_title(film.title, year=year)
-
-        if not tmdb_data:
-            logger.debug(f"[TMDb] Film non trouve: {film.title}")
-            return False
-
-        tmdb_id = tmdb_data.get('id')
         if not tmdb_id:
-            return False
+            if film.imdb_code:
+                tmdb_data = self.find_by_imdb(film.imdb_code)
+            if not tmdb_data:
+                year = film.release_date.year if film.release_date else None
+                tmdb_data = self.search_by_title(film.title, year=year)
+            if not tmdb_data:
+                logger.debug(f"[TMDb] Film non trouve: {film.title}")
+                return False
+            tmdb_id = tmdb_data.get('id')
+            if not tmdb_id:
+                return False
 
         # 2. Get full details (with videos)
         details = self.get_details(tmdb_id)
