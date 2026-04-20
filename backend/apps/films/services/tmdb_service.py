@@ -239,9 +239,10 @@ class TMDbService:
         else:
             from django.db.models import Q
             qs = Film.objects.filter(
-                Q(tmdb_id__isnull=True) |   # jamais enrichi
-                Q(poster_url='') |           # poster perdu
-                Q(tmdb_id__isnull=False, tmdb_rating__isnull=True)  # tmdb_id connu mais enrichissement incomplet
+                Q(tmdb_id__isnull=True) |                                          # jamais enrichi
+                Q(poster_url='') |                                                 # poster perdu
+                Q(tmdb_id__isnull=False, tmdb_rating__isnull=True) |              # enrichissement incomplet
+                Q(tmdb_id__isnull=False, poster_url__startswith='https://cdn.kinepolis')  # poster Kinepolis CDN remplace par TMDb
             )
         total = qs.count()
         enriched = 0
