@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Search, SlidersHorizontal, X, Sparkles } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { filmsApi, recommendationsApi } from '../services/api'
+import { useAuthStore } from '../store/authStore'
 import FilmCard from '../components/FilmCard'
 import type { Film, PaginatedResponse, FilmRecommendation } from '../types'
 
@@ -14,6 +15,7 @@ function SkeletonCard() {
 export default function Films() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
+  const { user } = useAuthStore()
   const [films, setFilms] = useState<Film[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -23,11 +25,13 @@ export default function Films() {
   const [searchInput, setSearchInput] = useState('')
   const [recommendations, setRecommendations] = useState<FilmRecommendation[]>([])
 
+  // Re-fetch recommendations quand le mood change
+  const currentMood = user?.profile?.mood
   useEffect(() => {
     recommendationsApi.getRecommendations()
       .then(res => setRecommendations(res.data))
       .catch(() => {})
-  }, [])
+  }, [currentMood])
 
   const fetchFilms = useCallback(async () => {
     setLoading(true)
