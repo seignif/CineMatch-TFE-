@@ -168,6 +168,32 @@ export interface PlannedOuting {
   updated_at: string
 }
 
+// ---- Badges & Réputation (US-039/040) ----
+export interface Badge {
+  id: string
+  name: string
+  description: string
+  svg_id: string
+  color_primary: string
+  color_secondary: string
+  tier: 'bronze' | 'silver' | 'gold'
+  earned: boolean
+}
+
+export interface ReputationScore {
+  score: number | null
+  count: number
+  label: string
+  would_go_again_pct: number | null
+}
+
+// ---- Recommandations (US-035) ----
+export interface FilmRecommendation {
+  film: import('./index').Film
+  score: number
+  reasons: string[]
+}
+
 // ---- Chat ----
 export interface ChatMessage {
   id: number

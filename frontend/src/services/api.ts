@@ -55,6 +55,21 @@ export const filmsApi = {
     api.get('/films/films/', { params }),
   getById: (id: number) => api.get(`/films/films/${id}/`),
   getSeances: (id: number) => api.get(`/films/films/${id}/seances/`),
+  tmdbSearch: (q: string) => api.get('/films/films/tmdb-search/', { params: { q } }),
+}
+
+export const badgesApi = {
+  getMyBadges: () => api.get('/users/badges/'),
+  getReputation: (userId: number) => api.get(`/users/reputation/${userId}/`),
+}
+
+export const reviewsApi = {
+  create: (outingId: number, data: { rating: number; would_go_again: boolean; comment?: string }) =>
+    api.post(`/matching/outings/${outingId}/review/`, data),
+}
+
+export const recommendationsApi = {
+  getRecommendations: () => api.get('/users/recommendations/'),
 }
 
 export const cinemasApi = {
@@ -103,6 +118,7 @@ export const outingsApi = {
   refuse: (id: number) => api.put(`/matching/outings/${id}/confirm/`, { action: 'refuse' }),
   cancel: (id: number) => api.put(`/matching/outings/${id}/cancel/`),
   markBooked: (id: number) => api.put(`/matching/outings/${id}/booked/`),
+  complete: (id: number) => api.put(`/matching/outings/${id}/complete/`),
 }
 
 export const chatApi = {

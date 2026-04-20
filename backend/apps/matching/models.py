@@ -110,12 +110,29 @@ class PlannedOuting(models.Model):
 
 
 class Review(models.Model):
+    """US-038 : Avis post-sortie."""
+    RATING_CHOICES = [(i, str(i)) for i in range(1, 6)]
+
     outing = models.ForeignKey(PlannedOuting, on_delete=models.CASCADE, related_name='reviews')
-    reviewer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    rating = models.IntegerField()  # 1-5
+    reviewer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='reviews_given',
+    )
+    reviewed = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='reviews_received',
+        null=True,
+    )
+    rating = models.IntegerField(choices=RATING_CHOICES)
+    would_go_again = models.BooleanField(default=True)
     comment = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = 'matching_review'
         unique_together = ('outing', 'reviewer')
+
+    def __str__(self):
+        return f"{self.reviewer} → {self.reviewed} ({self.rating}★)"

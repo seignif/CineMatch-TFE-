@@ -1,0 +1,11 @@
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="60" cy="60" r="58" fill="#1A1A2E"/>
+  <circle cx="60" cy="60" r="54" fill="none" stroke="#FFD700" stroke-width="3"/>
+  <circle cx="60" cy="60" r="49" fill="none" stroke="#FFD700" stroke-width="0.5"/>
+  <polygon points="60,22 67,44 91,44 72,57 79,79 60,66 41,79 48,57 29,44 53,44" fill="#FFD700" stroke="#E63946" stroke-width="1.5"/>
+  <rect x="30" y="82" width="60" height="5" rx="1" fill="#FFD700" opacity="0.9"/>
+  <rect x="37" y="77" width="46" height="5" rx="1" fill="#FFD700" opacity="0.7"/>
+  <rect x="44" y="72" width="32" height="5" rx="1" fill="#FFD700" opacity="0.5"/>
+  <text x="60" y="14" text-anchor="middle" fill="#FFD700" font-size="5">✦ ✦ ✦ ✦ ✦ ✦ ✦</text>
+  <text x="60" y="108" text-anchor="middle" fill="#FFD700" font-size="6" font-family="Arial, sans-serif" font-weight="bold" letter-spacing="0.5">MONTÉE DES MARCHES</text>
+</svg>

@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Search, SlidersHorizontal, X } from 'lucide-react'
-import { filmsApi } from '../services/api'
+import { Search, SlidersHorizontal, X, Sparkles } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { filmsApi, recommendationsApi } from '../services/api'
+import { useAuthStore } from '../store/authStore'
 import FilmCard from '../components/FilmCard'
-import type { Film, PaginatedResponse } from '../types'
+import type { Film, PaginatedResponse, FilmRecommendation } from '../types'
 
 function SkeletonCard() {
   return (
@@ -11,13 +13,25 @@ function SkeletonCard() {
 }
 
 export default function Films() {
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const { user } = useAuthStore()
   const [films, setFilms] = useState<Film[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [isFuture, setIsFuture] = useState(false)
+  const [isFuture, setIsFuture] = useState(searchParams.get('tab') === 'bientot')
   const [page, setPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
   const [searchInput, setSearchInput] = useState('')
+  const [recommendations, setRecommendations] = useState<FilmRecommendation[]>([])
+
+  // Re-fetch recommendations quand le mood change
+  const currentMood = user?.profile?.mood
+  useEffect(() => {
+    recommendationsApi.getRecommendations()
+      .then(res => setRecommendations(res.data))
+      .catch(() => {})
+  }, [currentMood])
 
   const fetchFilms = useCallback(async () => {
     setLoading(true)
@@ -69,6 +83,41 @@ export default function Films() {
         </p>
       </div>
 
+      {/* Section Recommandations (US-035) */}
+      {recommendations.length > 0 && !search && (
+        <div className="mb-10">
+          <div className="flex items-center gap-2 mb-4">
+            <Sparkles size={16} style={{ color: 'var(--accent-gold)' }} />
+            <h2 className="text-sm font-medium uppercase tracking-wider" style={{ color: 'var(--accent-gold)' }}>
+              Films pour vous
+            </h2>
+          </div>
+          <div className="flex gap-4 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: 'none' }}>
+            {recommendations.map(({ film, reasons }) => (
+              <button key={film.id} onClick={() => navigate(`/films/${film.id}`)}
+                className="shrink-0 w-36 text-left group">
+                <div className="w-36 h-52 rounded-xl overflow-hidden mb-2 relative"
+                  style={{ border: '1px solid rgba(255,215,0,0.2)' }}>
+                  {film.poster_url
+                    ? <img src={film.poster_url} alt={film.title}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                    : <div className="w-full h-full flex items-center justify-center text-3xl"
+                        style={{ background: 'var(--bg-card)' }}>🎬</div>
+                  }
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                </div>
+                <p className="text-white text-xs font-medium leading-tight truncate">{film.title}</p>
+                {reasons[0] && (
+                  <p className="text-xs mt-0.5 leading-tight" style={{ color: 'var(--accent-gold)' }}>
+                    {reasons[0]}
+                  </p>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Controls */}
       <div className="flex flex-col sm:flex-row gap-3 mb-8">
         {/* Search */}
@@ -92,7 +141,7 @@ export default function Films() {
         {/* Toggle à l'affiche / prochainement */}
         <div className="flex items-center gap-1 glass rounded-lg p-1 shrink-0">
           <button
-            onClick={() => setIsFuture(false)}
+            onClick={() => { setIsFuture(false); setSearchParams({}) }}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               !isFuture ? 'bg-[var(--accent-red)] text-white' : 'text-[var(--text-muted)] hover:text-white'
             }`}
@@ -100,7 +149,7 @@ export default function Films() {
             À l'affiche
           </button>
           <button
-            onClick={() => setIsFuture(true)}
+            onClick={() => { setIsFuture(true); setSearchParams({ tab: 'bientot' }) }}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               isFuture ? 'bg-[var(--accent-red)] text-white' : 'text-[var(--text-muted)] hover:text-white'
             }`}
