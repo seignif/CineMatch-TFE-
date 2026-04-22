@@ -28,6 +28,7 @@ function calcAge(dob?: string | null) {
 }
 
 function ProfileModal({ candidate, onClose }: { candidate: Candidate; onClose: () => void }) {
+
   const genres = Object.entries(candidate.profile.genre_preferences ?? {})
     .sort((a, b) => b[1] - a[1])
     .slice(0, 6)
@@ -71,6 +72,12 @@ function ProfileModal({ candidate, onClose }: { candidate: Candidate; onClose: (
           >
             {candidate.score}%
           </div>
+          {candidate.superliked_me && (
+            <div className="absolute top-3 left-12 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold"
+              style={{ background: 'rgba(250,204,21,0.9)', color: '#1a1a1a' }}>
+              <Star size={11} fill="currentColor" /> A envoyé un Super Like
+            </div>
+          )}
           {/* Close button */}
           <button
             onClick={onClose}
@@ -364,6 +371,12 @@ export default function Matching() {
                       style={{ background: 'rgba(0,0,0,0.7)', color: 'var(--accent-gold)' }}>
                       {c.score}%
                     </div>
+                    {c.superliked_me && (
+                      <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold"
+                        style={{ background: 'rgba(250,204,21,0.9)', color: '#1a1a1a' }}>
+                        <Star size={11} fill="currentColor" /> Super Like
+                      </div>
+                    )}
                   </div>
                   <div className="p-4">
                     <h3 className="text-xl font-semibold text-white mb-0.5">

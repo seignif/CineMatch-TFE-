@@ -37,11 +37,18 @@ class CandidatesView(APIView):
 
         exclude_ids = set(already_swiped) | matched_flat | {user.id}
 
+        # Utilisateurs qui ont superliké l'utilisateur courant (sans qu'il ait encore swipé)
+        superliked_me_ids = set(
+            Swipe.objects.filter(to_user=user, action='superlike')
+            .exclude(from_user_id__in=exclude_ids)
+            .values_list('from_user_id', flat=True)
+        )
+
         candidates = (
             User.objects.exclude(id__in=exclude_ids)
             .select_related('profile')
             .prefetch_related('profile__films_signature')
-            [:20]
+            [:50]
         )
 
         results = []
@@ -51,15 +58,19 @@ class CandidatesView(APIView):
                 'candidate': candidate,
                 'score': score,
                 'reasons': reasons,
+                'superliked_me': candidate.id in superliked_me_ids,
             })
 
-        results.sort(key=lambda x: x['score'], reverse=True)
+        # Superlikes d'abord, puis par score décroissant
+        results.sort(key=lambda x: (x['superliked_me'], x['score']), reverse=True)
+        results = results[:20]
 
         serialized = []
         for item in results:
             c = item['candidate']
             c.score = item['score']
             c.reasons = item['reasons']
+            c.superliked_me = item['superliked_me']
             serialized.append(CandidateSerializer(c, context={'request': request}).data)
 
         return Response(serialized)

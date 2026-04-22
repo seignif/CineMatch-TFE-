@@ -265,7 +265,7 @@ function OutingCard({
               </button>
             )}
 
-            {outing.status === 'confirmed' && !userBooked && (
+            {outing.status === 'confirmed' && !userBooked && outing.seance && (
               <button onClick={() => runAction(() => outingsApi.markBooked(outing.id), 'booked')}
                 disabled={loading !== null}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[var(--accent-gold)] bg-yellow-400/10 hover:bg-yellow-400/20 transition-colors disabled:opacity-50">
@@ -294,7 +294,7 @@ function OutingCard({
             )}
           </div>
 
-          {outing.status === 'confirmed' && (
+          {outing.status === 'confirmed' && outing.seance && (
             <div className="flex gap-4 mt-3 text-xs text-[var(--text-muted)]">
               <span>{outing.proposer_info.first_name}: {outing.proposer_booked ? '✓ réservé' : '○ pas encore'}</span>
               <span>{outing.partner_info.first_name}: {outing.partner_booked ? '✓ réservé' : '○ pas encore'}</span>

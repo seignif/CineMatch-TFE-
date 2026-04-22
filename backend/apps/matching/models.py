@@ -104,8 +104,11 @@ class PlannedOuting(models.Model):
 
     def is_upcoming(self):
         from django.utils import timezone
+        now = timezone.now()
         if self.seance and self.seance.showtime:
-            return self.seance.showtime > timezone.now()
+            return self.seance.showtime > now
+        if self.meeting_time:
+            return self.meeting_time > now
         return False
 
 

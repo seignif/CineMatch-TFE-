@@ -111,6 +111,7 @@ export interface Candidate {
   profile: CandidateProfile
   score: number
   reasons: string[]
+  superliked_me: boolean
 }
 
 export interface Match {

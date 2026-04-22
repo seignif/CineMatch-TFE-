@@ -21,10 +21,11 @@ class CandidateSerializer(serializers.ModelSerializer):
     profile = PublicProfileSerializer(read_only=True)
     score = serializers.IntegerField(read_only=True)
     reasons = serializers.ListField(child=serializers.CharField(), read_only=True)
+    superliked_me = serializers.BooleanField(read_only=True)
 
     class Meta:
         model = User
-        fields = ['id', 'first_name', 'city', 'date_of_birth', 'profile', 'score', 'reasons']
+        fields = ['id', 'first_name', 'city', 'date_of_birth', 'profile', 'score', 'reasons', 'superliked_me']
 
 
 class MatchSerializer(serializers.ModelSerializer):
