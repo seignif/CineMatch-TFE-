@@ -509,7 +509,7 @@ class GroupRespondInvitationView(APIView):
             membership.save()
             GroupMessage.objects.create(
                 group=membership.group, sender=user,
-                content=f"{user.first_name} a rejoint le groupe ! 🎉",
+                content=f"{user.first_name} a rejoint le groupe.",
                 is_system=True,
             )
             serializer = GroupSerializer(membership.group, context={'request': request})
@@ -670,7 +670,7 @@ class FilmVoteView(APIView):
             if not already_chosen:
                 GroupMessage.objects.create(
                     group=group, sender=user,
-                    content=f"Film choisi : {film.title} ! 🎬",
+                    content=f"Film choisi : {film.title}.",
                     is_system=True,
                 )
 
@@ -702,7 +702,7 @@ class GroupChooseFilmView(APIView):
         group.save()
         GroupMessage.objects.create(
             group=group, sender=user,
-            content=f"{user.first_name} a choisi le film : {film.title} 🎬",
+            content=f"{user.first_name} a choisi le film : {film.title}.",
             is_system=True,
         )
 
