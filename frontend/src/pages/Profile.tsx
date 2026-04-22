@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
-import { Camera, Save, Eye, User, MapPin } from 'lucide-react'
+import { Camera, Save, Eye, User, MapPin, Search, X, Award } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
-import { usersApi } from '../services/api'
+import { usersApi, filmsApi, badgesApi } from '../services/api'
+import type { Film, Badge, ReputationScore } from '../types'
+import { mediaUrl } from '../utils/media'
+import { BadgesGrid } from '../components/BadgeDisplay'
 
 const MOOD_OPTIONS = [
   { value: 'rire', label: 'Envie de rire' },
@@ -15,7 +18,7 @@ const GENRE_OPTIONS = [
   'Science-fiction', 'Animation', 'Documentaire', 'Romance', 'Aventure',
 ]
 
-type Tab = 'infos' | 'preferences' | 'public'
+type Tab = 'infos' | 'preferences' | 'public' | 'badges'
 
 export default function Profile() {
   const { user, fetchMe } = useAuthStore()
@@ -33,6 +36,16 @@ export default function Profile() {
   const [mood, setMood] = useState('')
   const [genrePrefs, setGenrePrefs] = useState<Record<string, number>>({})
 
+  // Films signature
+  const [filmsSignature, setFilmsSignature] = useState<Film[]>([])
+  const [filmQuery, setFilmQuery] = useState('')
+  const [filmResults, setFilmResults] = useState<Film[]>([])
+  const [searchingFilms, setSearchingFilms] = useState(false)
+
+  // Badges & réputation
+  const [badges, setBadges] = useState<Badge[]>([])
+  const [reputation, setReputation] = useState<ReputationScore | null>(null)
+
   useEffect(() => {
     if (user) {
       setFirstName(user.first_name)
@@ -42,8 +55,32 @@ export default function Profile() {
       setBio(user.profile?.bio || '')
       setMood(user.profile?.mood || '')
       setGenrePrefs(user.profile?.genre_preferences || {})
+      setFilmsSignature(user.profile?.films_signature || [])
     }
   }, [user])
+
+  // Fetch badges quand on ouvre l'onglet
+  useEffect(() => {
+    if (tab === 'badges' && user) {
+      badgesApi.getMyBadges().then(res => setBadges(res.data.badges)).catch(() => {})
+      badgesApi.getReputation(user.id).then(res => setReputation(res.data)).catch(() => {})
+    }
+  }, [tab, user])
+
+  // Recherche TMDb debounced
+  useEffect(() => {
+    if (!filmQuery.trim()) { setFilmResults([]); return }
+    const t = setTimeout(async () => {
+      setSearchingFilms(true)
+      try {
+        const res = await filmsApi.tmdbSearch(filmQuery)
+        setFilmResults(res.data)
+      } finally {
+        setSearchingFilms(false)
+      }
+    }, 400)
+    return () => clearTimeout(t)
+  }, [filmQuery])
 
   const showSuccess = (msg: string) => {
     setSuccess(msg)
@@ -66,7 +103,10 @@ export default function Profile() {
     e.preventDefault()
     setLoading(true)
     try {
-      await usersApi.updateProfile({ bio, mood, genre_preferences: genrePrefs })
+      await usersApi.updateProfile({
+        bio, mood, genre_preferences: genrePrefs,
+        films_signature_ids: filmsSignature.map(f => f.id),
+      })
       await fetchMe()
       showSuccess('Profil mis à jour !')
     } finally {
@@ -109,7 +149,7 @@ export default function Profile() {
           <div className="w-24 h-24 rounded-full overflow-hidden border-2"
             style={{ borderColor: 'var(--accent-red)' }}>
             {user.profile?.profile_picture ? (
-              <img src={user.profile.profile_picture} alt="Avatar" className="w-full h-full object-cover" />
+              <img src={mediaUrl(user.profile.profile_picture)!} alt="Avatar" className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-3xl font-bold"
                 style={{ background: 'var(--bg-card)', color: 'var(--accent-red)' }}>
@@ -149,9 +189,10 @@ export default function Profile() {
           { id: 'infos', label: 'Mes infos', icon: User },
           { id: 'preferences', label: 'Préférences', icon: Save },
           { id: 'public', label: 'Profil public', icon: Eye },
+          { id: 'badges', label: 'Badges', icon: Award },
         ] as { id: Tab; label: string; icon: typeof User }[]).map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setTab(id)}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
               tab === id ? 'bg-[var(--accent-red)] text-white' : 'text-[var(--text-muted)] hover:text-white'
             }`}>
             <Icon size={14} />
@@ -270,6 +311,63 @@ export default function Profile() {
             </div>
           </div>
 
+          {/* Films signature */}
+          <div className="glass rounded-2xl p-6">
+            <label className="block text-sm font-medium text-white mb-1">
+              Films signature
+              <span className="text-[var(--text-muted)] font-normal ml-2 text-xs">
+                ({filmsSignature.length}/5) — utilisés pour le matching
+              </span>
+            </label>
+            <p className="text-xs text-[var(--text-muted)] mb-3">Tes films préférés de tous les temps, pas forcément au cinéma.</p>
+            {filmsSignature.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {filmsSignature.map(f => (
+                  <span key={f.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm text-white"
+                    style={{ background: 'var(--accent-red)', border: '1px solid transparent' }}>
+                    {f.title}
+                    <button type="button" onClick={() => setFilmsSignature(prev => prev.filter(x => x.id !== f.id))}>
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {filmsSignature.length < 5 && (
+              <div className="relative">
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                  <input type="text" value={filmQuery} onChange={e => setFilmQuery(e.target.value)}
+                    placeholder="Rechercher un film (ex: Interstellar)..." className="input-field pl-9" />
+                  {searchingFilms && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  )}
+                </div>
+                {filmResults.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 rounded-xl overflow-hidden shadow-xl"
+                    style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    {filmResults.map(f => (
+                      <button key={f.id} type="button"
+                        onClick={() => {
+                          if (!filmsSignature.find(x => x.id === f.id))
+                            setFilmsSignature(prev => [...prev, f])
+                          setFilmQuery(''); setFilmResults([])
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-colors text-left">
+                        {f.poster_url
+                          ? <img src={f.poster_url} alt={f.title} className="w-8 h-12 object-cover rounded" />
+                          : <div className="w-8 h-12 rounded flex items-center justify-center text-xs text-[var(--text-muted)]"
+                              style={{ background: 'rgba(255,255,255,0.05)' }}>?</div>
+                        }
+                        <span className="text-sm text-white">{f.title}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <button type="submit" disabled={loading}
             className="btn-primary flex items-center gap-2 disabled:opacity-60">
             {loading ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save size={15} />}
@@ -285,7 +383,7 @@ export default function Profile() {
             <div className="w-16 h-16 rounded-full overflow-hidden border-2"
               style={{ borderColor: 'var(--accent-red)' }}>
               {user.profile?.profile_picture ? (
-                <img src={user.profile.profile_picture} alt="Avatar" className="w-full h-full object-cover" />
+                <img src={mediaUrl(user.profile.profile_picture)!} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-2xl font-bold"
                   style={{ background: 'var(--bg-card)', color: 'var(--accent-red)' }}>
@@ -326,9 +424,74 @@ export default function Profile() {
             </div>
           )}
 
+          {filmsSignature.length > 0 && (
+            <div className="mb-4">
+              <p className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-2">Films signature</p>
+              <div className="flex flex-wrap gap-2">
+                {filmsSignature.map(f => (
+                  <div key={f.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    {f.poster_url
+                      ? <img src={f.poster_url} alt={f.title} className="w-6 h-9 object-cover rounded" />
+                      : <div className="w-6 h-9 rounded flex items-center justify-center text-[10px]"
+                          style={{ background: 'rgba(255,255,255,0.05)' }}>?</div>
+                    }
+                    <span className="text-xs text-white">{f.title}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <p className="text-xs text-[var(--text-muted)] italic">
             C'est ainsi que les autres utilisateurs voient ton profil. Email et mot de passe ne sont jamais affichés.
           </p>
+        </div>
+      )}
+
+      {/* Tab: Badges */}
+      {tab === 'badges' && (
+        <div className="space-y-6">
+          {/* Score de réputation */}
+          {reputation && (
+            <div className="glass rounded-2xl p-6">
+              <h3 className="text-sm font-medium text-white mb-4 uppercase tracking-wider">Score de réputation</h3>
+              {reputation.count >= 3 ? (
+                <div className="flex items-center gap-6">
+                  <div className="text-center">
+                    <p className="text-4xl font-bold" style={{ color: 'var(--accent-gold)' }}>
+                      {reputation.score}
+                    </p>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">/ 5</p>
+                  </div>
+                  <div>
+                    <p className="text-white font-semibold">{reputation.label}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{reputation.count} avis reçus</p>
+                    {reputation.would_go_again_pct !== null && (
+                      <p className="text-xs mt-1" style={{ color: 'var(--accent-gold)' }}>
+                        {reputation.would_go_again_pct}% repartiraient avec toi
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl font-bold text-[var(--text-muted)]">Nouveau</span>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    {reputation.count > 0
+                      ? `${reputation.count} avis — encore ${3 - reputation.count} pour afficher ton score`
+                      : 'Aucun avis reçu pour l\'instant'}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Grille de badges */}
+          <div className="glass rounded-2xl p-6">
+            <h3 className="text-sm font-medium text-white mb-6 uppercase tracking-wider">Mes badges</h3>
+            <BadgesGrid badges={badges} />
+          </div>
         </div>
       )}
     </div>

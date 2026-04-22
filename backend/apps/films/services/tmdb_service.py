@@ -158,22 +158,22 @@ class TMDbService:
         """
         from apps.films.models import Genre
 
-        # 1. Find TMDb entry
+        # 1. Find TMDb entry — utilise le tmdb_id existant si disponible
         tmdb_data = None
-        if film.imdb_code:
-            tmdb_data = self.find_by_imdb(film.imdb_code)
+        tmdb_id = film.tmdb_id
 
-        if not tmdb_data:
-            year = film.release_date.year if film.release_date else None
-            tmdb_data = self.search_by_title(film.title, year=year)
-
-        if not tmdb_data:
-            logger.debug(f"[TMDb] Film non trouve: {film.title}")
-            return False
-
-        tmdb_id = tmdb_data.get('id')
         if not tmdb_id:
-            return False
+            if film.imdb_code:
+                tmdb_data = self.find_by_imdb(film.imdb_code)
+            if not tmdb_data:
+                year = film.release_date.year if film.release_date else None
+                tmdb_data = self.search_by_title(film.title, year=year)
+            if not tmdb_data:
+                logger.debug(f"[TMDb] Film non trouve: {film.title}")
+                return False
+            tmdb_id = tmdb_data.get('id')
+            if not tmdb_id:
+                return False
 
         # 2. Get full details (with videos)
         details = self.get_details(tmdb_id)
@@ -181,9 +181,10 @@ class TMDbService:
             return False
 
         # 3. Build update dict
-        poster_path = details.get('poster_path') or tmdb_data.get('poster_path', '')
-        backdrop_path = details.get('backdrop_path') or tmdb_data.get('backdrop_path', '')
-        vote_average = details.get('vote_average') or tmdb_data.get('vote_average')
+        fallback = tmdb_data or {}
+        poster_path = details.get('poster_path') or fallback.get('poster_path', '')
+        backdrop_path = details.get('backdrop_path') or fallback.get('backdrop_path', '')
+        vote_average = details.get('vote_average') or fallback.get('vote_average')
 
         # Si un autre film a déjà ce tmdb_id, on n'écrase pas la clé unique
         from apps.films.models import Film as FilmModel
@@ -233,7 +234,16 @@ class TMDbService:
         """
         from apps.films.models import Film
 
-        qs = Film.objects.all() if force else Film.objects.filter(tmdb_id__isnull=True)
+        if force:
+            qs = Film.objects.all()
+        else:
+            from django.db.models import Q
+            qs = Film.objects.filter(
+                Q(tmdb_id__isnull=True) |                                          # jamais enrichi
+                Q(poster_url='') |                                                 # poster perdu
+                Q(tmdb_id__isnull=False, tmdb_rating__isnull=True) |              # enrichissement incomplet
+                Q(tmdb_id__isnull=False, poster_url__startswith='https://cdn.kinepolis')  # poster Kinepolis CDN remplace par TMDb
+            )
         total = qs.count()
         enriched = 0
         failed = 0

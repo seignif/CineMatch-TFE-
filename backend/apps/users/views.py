@@ -117,3 +117,46 @@ class ChangePasswordView(APIView):
             {"message": "Mot de passe modifié avec succès."},
             status=status.HTTP_200_OK,
         )
+
+
+class BadgesView(APIView):
+    """GET /api/users/badges/ — Liste tous les badges (US-039)."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from apps.users.badge_service import BadgeService
+        badges = BadgeService.get_all_badges_info(request.user)
+        return Response({'badges': badges})
+
+
+class ReputationView(APIView):
+    """GET /api/users/reputation/<id>/ — Score de réputation public (US-040)."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        from apps.users.badge_service import BadgeService
+        try:
+            target = User.objects.get(pk=pk)
+        except User.DoesNotExist:
+            return Response({'error': 'Utilisateur introuvable.'}, status=404)
+        return Response(BadgeService.get_reputation_score(target))
+
+
+class RecommendationsView(APIView):
+    """GET /api/users/recommendations/ — Films recommandés personnalisés (US-035)."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from apps.films.services.recommendation_service import RecommendationService
+        from apps.films.serializers import FilmSerializer
+
+        recs = RecommendationService().get_recommendations(request.user, limit=5)
+        data = [
+            {
+                'film': FilmSerializer(r['film'], context={'request': request}).data,
+                'score': r['score'],
+                'reasons': r['reasons'],
+            }
+            for r in recs
+        ]
+        return Response(data)

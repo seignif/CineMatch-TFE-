@@ -18,11 +18,11 @@ with sync_playwright() as p:
 with open("kinepolis_data.json", "w", encoding="utf-8") as f:
     json.dump(data, f, ensure_ascii=False, indent=2)
 
-print("✅ Sauvegardé dans kinepolis_data.json")
+print(" Sauvegardé dans kinepolis_data.json")
 print("Films:", len(data["current_movies"]["films"]))
 print("Sessions:", len(data["current_movies"]["sessions"]))
 print("Cinémas:", len(data["complexes"]))
 
 # Afficher un exemple de cinéma
-print("\n🎬 Exemple cinéma:")
+print("\n Exemple cinéma:")
 print(json.dumps(data["complexes"][0], indent=2, ensure_ascii=False))

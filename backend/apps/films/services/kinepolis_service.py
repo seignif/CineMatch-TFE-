@@ -1,9 +1,15 @@
+import json
 import logging
+import os
+import subprocess
+import sys
 
 from django.core.cache import cache
 from django.utils.dateparse import parse_datetime
 
 logger = logging.getLogger(__name__)
+
+_SCRAPER_SCRIPT = os.path.join(os.path.dirname(__file__), "_kinepolis_scraper.py")
 
 CDN_BASE = "https://cdn.kinepolis.be"
 BOOKING_BASE = "https://kinepolis.be/fr/direct-vista-redirect"
@@ -32,23 +38,20 @@ class KinepolisService:
         return data
 
     def _scrape(self):
-        from playwright.sync_api import sync_playwright
-
-        with sync_playwright() as p:
-            browser = p.chromium.launch(
-                headless=False,
-                channel="chrome",
-                args=["--disable-blink-features=AutomationControlled"],
+        # Run Playwright in a separate process to avoid asyncio/Windows conflicts
+        # on Python 3.13 (NotImplementedError: _make_subprocess_transport).
+        result = subprocess.run(
+            [sys.executable, _SCRAPER_SCRIPT],
+            capture_output=True,
+            timeout=120,
+        )
+        if result.returncode != 0:
+            logger.error(f"[Kinepolis] Scraper failed:\n{result.stderr.decode('utf-8', errors='replace')}")
+            raise RuntimeError(
+                f"Kinepolis scraper exited with code {result.returncode}: "
+                f"{result.stderr.decode('utf-8', errors='replace')}"
             )
-            try:
-                page = browser.new_page()
-                page.goto(self.KINEPOLIS_URL, wait_until="networkidle")
-                page.wait_for_timeout(8000)
-                data = page.evaluate("() => Drupal.settings.variables")
-            finally:
-                browser.close()
-
-        return data
+        return json.loads(result.stdout.decode('utf-8'))
 
     # ------------------------------------------------------------------
     # Sync cinemas
@@ -96,6 +99,16 @@ class KinepolisService:
 
         films_count = sum(self._sync_film(fd, cdn_base) for fd in all_films.values())
 
+        # Retirer les films qui ne sont plus dans le feed Kinepolis
+        from apps.films.models import Film
+        retired = Film.objects.exclude(
+            kinepolis_id__startswith='tmdb_'
+        ).exclude(
+            kinepolis_id__in=set(all_films.keys())
+        ).update(is_future=True)
+        if retired:
+            logger.info(f"[Kinepolis] {retired} films retires de l'affiche (plus dans le feed)")
+
         # Sessions (current + future)
         all_sessions = []
         for section in ("current_movies", "future_movies"):
@@ -131,6 +144,11 @@ class KinepolisService:
                 dt = tz.make_aware(dt)
             release_date = dt
 
+        existing = Film.objects.filter(kinepolis_id=film_id).only('poster_url', 'backdrop_url').first()
+        # Ne pas ecraser les posters/backdrops deja enrichis par TMDb
+        final_poster = poster_url if not (existing and existing.poster_url) else existing.poster_url
+        final_backdrop = backdrop_url if not (existing and existing.backdrop_url) else existing.backdrop_url
+
         film, _ = Film.objects.update_or_create(
             kinepolis_id=film_id,
             defaults={
@@ -144,8 +162,8 @@ class KinepolisService:
                 "language": film_data.get("language", "FR"),
                 "audio_language": film_data.get("audioLanguage", ""),
                 "is_future": film_data.get("showAsFutureRelease", False),
-                "poster_url": poster_url,
-                "backdrop_url": backdrop_url,
+                "poster_url": final_poster,
+                "backdrop_url": final_backdrop,
             },
         )
 

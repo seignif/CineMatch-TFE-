@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { Film, Users, Heart, MessageCircle, Menu, X, LogOut, User } from 'lucide-react'
+import { Film, Users, Heart, MessageCircle, Calendar, Menu, X, LogOut, User } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
-import { chatApi } from '../services/api'
+import { chatApi, outingsApi, groupsApi } from '../services/api'
 
 export default function Navbar() {
   const { isAuthenticated, user, logout } = useAuthStore()
@@ -11,13 +11,19 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [unread, setUnread] = useState(0)
+  const [upcomingOutings, setUpcomingOutings] = useState(0)
+  const [pendingInvitations, setPendingInvitations] = useState(0)
 
   useEffect(() => {
     if (!isAuthenticated) return
-    const poll = () => chatApi.getUnreadCount().then(r => setUnread(r.data.unread_count)).catch(() => {})
-    poll()
-    const t = setInterval(poll, 30000)
-    return () => clearInterval(t)
+    const pollChat = () => chatApi.getUnreadCount().then(r => setUnread(r.data.unread_count)).catch(() => {})
+    const pollOutings = () => outingsApi.getUpcoming().then(r => setUpcomingOutings((r.data.results ?? r.data).length)).catch(() => {})
+    const pollInvitations = () => groupsApi.getInvitations().then(r => setPendingInvitations(r.data.length)).catch(() => {})
+    pollChat(); pollOutings(); pollInvitations()
+    const t1 = setInterval(pollChat, 30000)
+    const t2 = setInterval(pollOutings, 60000)
+    const t3 = setInterval(pollInvitations, 30000)
+    return () => { clearInterval(t1); clearInterval(t2); clearInterval(t3) }
   }, [isAuthenticated])
 
   const handleLogout = async () => {
@@ -29,6 +35,8 @@ export default function Navbar() {
     { to: '/films', label: 'Films', icon: Film, badge: 0 },
     { to: '/matching', label: 'Matching', icon: Users, badge: 0 },
     { to: '/matches', label: 'Matchs', icon: Heart, badge: 0 },
+    { to: '/outings', label: 'Sorties', icon: Calendar, badge: upcomingOutings },
+    { to: '/groups', label: 'Groupes', icon: Users, badge: pendingInvitations },
     { to: '/chat', label: 'Messages', icon: MessageCircle, badge: unread },
   ]
 
