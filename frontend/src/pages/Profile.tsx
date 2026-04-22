@@ -3,6 +3,7 @@ import { Camera, Save, Eye, User, MapPin, Search, X, Award } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { usersApi, filmsApi, badgesApi } from '../services/api'
 import type { Film, Badge, ReputationScore } from '../types'
+import { mediaUrl } from '../utils/media'
 import { BadgesGrid } from '../components/BadgeDisplay'
 
 const MOOD_OPTIONS = [
@@ -148,7 +149,7 @@ export default function Profile() {
           <div className="w-24 h-24 rounded-full overflow-hidden border-2"
             style={{ borderColor: 'var(--accent-red)' }}>
             {user.profile?.profile_picture ? (
-              <img src={user.profile.profile_picture} alt="Avatar" className="w-full h-full object-cover" />
+              <img src={mediaUrl(user.profile.profile_picture)!} alt="Avatar" className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-3xl font-bold"
                 style={{ background: 'var(--bg-card)', color: 'var(--accent-red)' }}>
@@ -382,7 +383,7 @@ export default function Profile() {
             <div className="w-16 h-16 rounded-full overflow-hidden border-2"
               style={{ borderColor: 'var(--accent-red)' }}>
               {user.profile?.profile_picture ? (
-                <img src={user.profile.profile_picture} alt="Avatar" className="w-full h-full object-cover" />
+                <img src={mediaUrl(user.profile.profile_picture)!} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-2xl font-bold"
                   style={{ background: 'var(--bg-card)', color: 'var(--accent-red)' }}>

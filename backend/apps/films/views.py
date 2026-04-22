@@ -33,13 +33,34 @@ class FilmViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         qs = super().get_queryset()
-        is_future = self.request.query_params.get('is_future')
+        params = self.request.query_params
+
+        is_future = params.get('is_future')
         if is_future is not None:
             qs = qs.filter(is_future=is_future.lower() in ('true', '1'))
-        search = self.request.query_params.get('search')
+
+        search = params.get('search')
         if search:
             qs = qs.filter(title__icontains=search)
-        return qs
+
+        genre = params.get('genre')
+        if genre:
+            qs = qs.filter(genres__name__iexact=genre)
+
+        min_rating = params.get('min_rating')
+        if min_rating:
+            try:
+                qs = qs.filter(tmdb_rating__gte=float(min_rating))
+            except ValueError:
+                pass
+
+        return qs.distinct()
+
+    @action(detail=False, url_path='genres', permission_classes=[AllowAny])
+    def genres(self, request):
+        from apps.films.models import Genre
+        genres = Genre.objects.filter(film__isnull=False).values_list('name', flat=True).distinct().order_by('name')
+        return Response(list(genres))
 
     @action(detail=True, url_path='seances')
     def seances(self, request, pk=None):

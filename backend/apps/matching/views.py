@@ -9,10 +9,11 @@ from rest_framework.views import APIView
 from apps.users.models import User
 from .algorithm import MatchingAlgorithm
 from .ai_service import MatchingAIService
-from .models import Swipe, Match, PlannedOuting, Review
+from .models import Swipe, Match, PlannedOuting, Review, Group, GroupMember, GroupMessage, FilmVote
 from .serializers import (
     CandidateSerializer, MatchSerializer, SwipeSerializer,
     PlannedOutingSerializer, ReviewSerializer,
+    GroupSerializer, GroupMessageSerializer, FilmVoteSerializer,
 )
 
 logger = logging.getLogger(__name__)
@@ -36,11 +37,18 @@ class CandidatesView(APIView):
 
         exclude_ids = set(already_swiped) | matched_flat | {user.id}
 
+        # Utilisateurs qui ont superliké l'utilisateur courant (sans qu'il ait encore swipé)
+        superliked_me_ids = set(
+            Swipe.objects.filter(to_user=user, action='superlike')
+            .exclude(from_user_id__in=exclude_ids)
+            .values_list('from_user_id', flat=True)
+        )
+
         candidates = (
             User.objects.exclude(id__in=exclude_ids)
             .select_related('profile')
             .prefetch_related('profile__films_signature')
-            [:20]
+            [:50]
         )
 
         results = []
@@ -50,15 +58,19 @@ class CandidatesView(APIView):
                 'candidate': candidate,
                 'score': score,
                 'reasons': reasons,
+                'superliked_me': candidate.id in superliked_me_ids,
             })
 
-        results.sort(key=lambda x: x['score'], reverse=True)
+        # Superlikes d'abord, puis par score décroissant
+        results.sort(key=lambda x: (x['superliked_me'], x['score']), reverse=True)
+        results = results[:20]
 
         serialized = []
         for item in results:
             c = item['candidate']
             c.score = item['score']
             c.reasons = item['reasons']
+            c.superliked_me = item['superliked_me']
             serialized.append(CandidateSerializer(c, context={'request': request}).data)
 
         return Response(serialized)
@@ -356,8 +368,9 @@ class ReviewCreateView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        # Empêcher de se noter soi-même
-        partner = outing.get_partner()
+        # Identifier le partenaire par rapport à l'utilisateur courant
+        match = outing.match
+        partner = match.user2 if match.user1 == user else match.user1
         if partner == user:
             return Response({'error': 'Invalide.'}, status=400)
 
@@ -387,3 +400,311 @@ class ReviewCreateView(APIView):
             'review': ReviewSerializer(review).data,
             'new_badges': new_badges,
         }, status=status.HTTP_201_CREATED)
+
+
+# ---------------------------------------------------------------------------
+# Groupes (US-041 / US-042 / US-043)
+# ---------------------------------------------------------------------------
+
+class GroupListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = GroupSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        return Group.objects.filter(
+            groupmember__user=user,
+            groupmember__status='accepted',
+        ).prefetch_related(
+            'groupmember_set__user__profile',
+            'messages',
+            'votes__film',
+        ).distinct()
+
+    def create(self, request, *args, **kwargs):
+        user = request.user
+        name = request.data.get('name', '').strip()
+        member_ids = request.data.get('member_ids', [])
+
+        if not member_ids:
+            return Response({'error': 'Invitez au moins une personne.'}, status=status.HTTP_400_BAD_REQUEST)
+        if len(member_ids) > 7:
+            return Response({'error': 'Maximum 7 invités par groupe.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Vérifier que les invités sont des matchs actifs du créateur
+        valid_ids = []
+        for mid in member_ids:
+            is_match = Match.objects.filter(
+                Q(user1=user, user2_id=mid) | Q(user1_id=mid, user2=user),
+                status='active',
+            ).exists()
+            if is_match:
+                valid_ids.append(mid)
+
+        if not valid_ids:
+            return Response({'error': 'Aucun des invités n\'est un de vos matchs.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        group = Group.objects.create(
+            name=name or f"Groupe de {user.first_name}",
+            creator=user,
+        )
+
+        # Créateur → accepté directement (admin)
+        GroupMember.objects.create(
+            group=group, user=user, role='admin', status='accepted',
+            responded_at=timezone.now(),
+        )
+
+        # Invités → statut pending
+        for mid in valid_ids:
+            try:
+                invitee = User.objects.get(id=mid)
+                GroupMember.objects.create(
+                    group=group, user=invitee, role='member',
+                    status='pending', invited_by=user,
+                )
+            except User.DoesNotExist:
+                pass
+
+        GroupMessage.objects.create(
+            group=group, sender=user,
+            content=f"{user.first_name} a créé le groupe.",
+            is_system=True,
+        )
+
+        serializer = GroupSerializer(group, context={'request': request})
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class GroupInvitationsView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = GroupSerializer
+
+    def get_queryset(self):
+        return Group.objects.filter(
+            groupmember__user=self.request.user,
+            groupmember__status='pending',
+        ).prefetch_related('groupmember_set__user__profile')
+
+
+class GroupRespondInvitationView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        user = request.user
+        action = request.data.get('action')
+
+        if action not in ('accept', 'decline'):
+            return Response({'error': "Action invalide : 'accept' ou 'decline'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            membership = GroupMember.objects.get(group_id=pk, user=user, status='pending')
+        except GroupMember.DoesNotExist:
+            return Response({'error': 'Invitation introuvable ou déjà traitée.'}, status=status.HTTP_404_NOT_FOUND)
+
+        membership.responded_at = timezone.now()
+
+        if action == 'accept':
+            membership.status = 'accepted'
+            membership.save()
+            GroupMessage.objects.create(
+                group=membership.group, sender=user,
+                content=f"{user.first_name} a rejoint le groupe.",
+                is_system=True,
+            )
+            serializer = GroupSerializer(membership.group, context={'request': request})
+            return Response({'message': 'Invitation acceptée !', 'group': serializer.data})
+        else:
+            membership.status = 'declined'
+            membership.save()
+            return Response({'message': 'Invitation refusée.'})
+
+
+class GroupDetailView(generics.RetrieveUpdateAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = GroupSerializer
+    http_method_names = ['get', 'patch', 'head', 'options']
+
+    def get_queryset(self):
+        return Group.objects.filter(groupmember__user=self.request.user).prefetch_related(
+            'groupmember_set__user__profile', 'messages', 'votes__film',
+        )
+
+    def perform_update(self, serializer):
+        if self.get_object().creator != self.request.user:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Seul le créateur peut modifier le groupe.")
+        serializer.save()
+
+
+class GroupLeaveView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        user = request.user
+        try:
+            membership = GroupMember.objects.get(group_id=pk, user=user, status='accepted')
+        except GroupMember.DoesNotExist:
+            return Response({'error': 'Vous n\'êtes pas membre de ce groupe.'}, status=status.HTTP_404_NOT_FOUND)
+
+        group = membership.group
+        GroupMessage.objects.create(
+            group=group, sender=user,
+            content=f"{user.first_name} a quitté le groupe.",
+            is_system=True,
+        )
+        membership.delete()
+
+        if group.groupmember_set.filter(status='accepted').count() == 0:
+            group.status = 'archived'
+            group.save()
+
+        return Response({'message': 'Vous avez quitté le groupe.'})
+
+
+class GroupInviteMembersView(APIView):
+    """POST /api/matching/groups/<pk>/invite/ — l'admin invite de nouveaux membres."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        user = request.user
+        try:
+            membership = GroupMember.objects.get(group_id=pk, user=user, status='accepted', role='admin')
+        except GroupMember.DoesNotExist:
+            return Response({'error': 'Réservé à l\'admin du groupe.'}, status=status.HTTP_403_FORBIDDEN)
+
+        group = membership.group
+        member_ids = request.data.get('member_ids', [])
+        if not member_ids:
+            return Response({'error': 'Sélectionnez au moins une personne.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        existing_ids = set(group.groupmember_set.values_list('user_id', flat=True))
+        invited = []
+
+        for mid in member_ids:
+            if mid in existing_ids:
+                continue
+            is_match = Match.objects.filter(
+                Q(user1=user, user2_id=mid) | Q(user1_id=mid, user2=user),
+                status='active',
+            ).exists()
+            if not is_match:
+                continue
+            try:
+                invitee = User.objects.get(id=mid)
+                GroupMember.objects.create(
+                    group=group, user=invitee, role='member',
+                    status='pending', invited_by=user,
+                )
+                invited.append(invitee.first_name)
+            except User.DoesNotExist:
+                pass
+
+        if not invited:
+            return Response({'error': 'Aucune invitation envoyée (déjà membres ou non-matchs).'}, status=status.HTTP_400_BAD_REQUEST)
+
+        GroupMessage.objects.create(
+            group=group, sender=user,
+            content=f"{user.first_name} a invité {', '.join(invited)}.",
+            is_system=True,
+        )
+        return Response({'message': f'{len(invited)} invitation(s) envoyée(s).', 'invited': invited})
+
+
+class GroupMessagesView(generics.ListAPIView):
+    permission_classes = [IsAuthenticated]
+    serializer_class = GroupMessageSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        group_id = self.kwargs['pk']
+        if not GroupMember.objects.filter(group_id=group_id, user=user, status='accepted').exists():
+            return GroupMessage.objects.none()
+        return GroupMessage.objects.filter(group_id=group_id).select_related('sender').order_by('created_at')
+
+
+class FilmVoteView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        user = request.user
+        if not GroupMember.objects.filter(group_id=pk, user=user, status='accepted').exists():
+            return Response({'error': 'Vous devez être membre actif pour voter.'}, status=status.HTTP_403_FORBIDDEN)
+
+        film_id = request.data.get('film_id')
+        vote_value = request.data.get('vote')
+        if vote_value not in ('up', 'down'):
+            return Response({'error': "Vote invalide : 'up' ou 'down'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        from apps.films.models import Film
+        try:
+            film = Film.objects.get(id=film_id)
+        except Film.DoesNotExist:
+            return Response({'error': 'Film introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+
+        group = Group.objects.get(id=pk)
+        existing = FilmVote.objects.filter(group=group, film=film, voter=user).first()
+
+        # Toggle : même vote → on le retire
+        if existing and existing.vote == vote_value:
+            existing.delete()
+            removed = True
+            film_vote = None
+        else:
+            film_vote, _ = FilmVote.objects.update_or_create(
+                group=group, film=film, voter=user,
+                defaults={'vote': vote_value},
+            )
+            removed = False
+
+        active_count = group.groupmember_set.filter(status='accepted').count()
+        up_votes = FilmVote.objects.filter(group=group, film=film, vote='up').count()
+        down_votes = FilmVote.objects.filter(group=group, film=film, vote='down').count()
+
+        film_chosen = False
+        if not removed and up_votes == active_count and active_count > 0:
+            already_chosen = group.chosen_film_id == film.id
+            group.chosen_film = film
+            group.save()
+            film_chosen = True
+            if not already_chosen:
+                GroupMessage.objects.create(
+                    group=group, sender=user,
+                    content=f"Film choisi : {film.title}.",
+                    is_system=True,
+                )
+
+        return Response({
+            'vote': FilmVoteSerializer(film_vote).data if film_vote else None,
+            'removed': removed,
+            'film_chosen': film_chosen,
+            'votes_for_film': {'up': up_votes, 'down': down_votes, 'total_active_members': active_count},
+        }, status=status.HTTP_200_OK)
+
+
+class GroupChooseFilmView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        user = request.user
+        try:
+            group = Group.objects.get(id=pk, creator=user)
+        except Group.DoesNotExist:
+            return Response({'error': 'Seul le créateur peut forcer le choix.'}, status=status.HTTP_403_FORBIDDEN)
+
+        from apps.films.models import Film
+        try:
+            film = Film.objects.get(id=request.data.get('film_id'))
+        except Film.DoesNotExist:
+            return Response({'error': 'Film introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+
+        group.chosen_film = film
+        group.save()
+        GroupMessage.objects.create(
+            group=group, sender=user,
+            content=f"{user.first_name} a choisi le film : {film.title}.",
+            is_system=True,
+        )
+
+        serializer = GroupSerializer(group, context={'request': request})
+        return Response({'message': f"Film choisi : {film.title} !", 'group': serializer.data})

@@ -318,3 +318,109 @@ class TestFilmsAPI(TestCase):
             response.data[0]["booking_url"],
             "https://kinepolis.be/fr/direct-vista-redirect/999/0/TCINEMA/0",
         )
+
+# ---------------------------------------------------------------------------
+# RecommendationService (US-035)
+# ---------------------------------------------------------------------------
+
+from apps.films.services.recommendation_service import RecommendationService
+from apps.users.models import User
+
+
+def _make_user_reco(email, username):
+    user = User.objects.create_user(
+        username=username, email=email, password="pass",
+        first_name="Test", last_name="User",
+    )
+    return user
+
+
+class TestRecommendationServiceNoProfile(TestCase):
+    def test_returns_list(self):
+        user = _make_user_reco("reco1@test.com", "reco1")
+        # Pas de films en base → liste vide
+        results = RecommendationService().get_recommendations(user)
+        self.assertIsInstance(results, list)
+
+
+class TestRecommendationServiceWithFilms(TestCase):
+    def setUp(self):
+        self.genre_action = Genre.objects.create(name="Action")
+        self.genre_comedy = Genre.objects.create(name="Comédie")
+        self.film1 = Film.objects.create(
+            kinepolis_id="REC001", title="Action Movie",
+            poster_url="https://example.com/p1.jpg",
+            is_future=False, tmdb_rating=7.5,
+        )
+        self.film1.genres.add(self.genre_action)
+        self.film2 = Film.objects.create(
+            kinepolis_id="REC002", title="Comedy Film",
+            poster_url="https://example.com/p2.jpg",
+            is_future=False, tmdb_rating=6.0,
+        )
+        self.film2.genres.add(self.genre_comedy)
+        # Film futur → exclu
+        self.film3 = Film.objects.create(
+            kinepolis_id="REC003", title="Future Film",
+            poster_url="https://example.com/p3.jpg",
+            is_future=True,
+        )
+        self.film3.genres.add(self.genre_action)
+
+        self.user = _make_user_reco("reco2@test.com", "reco2")
+        self.user.profile.genre_preferences = {"Action": 9, "Comédie": 5}
+        self.user.profile.mood = "adrenaline"
+        self.user.profile.save()
+
+    def test_returns_recommendations(self):
+        results = RecommendationService().get_recommendations(self.user)
+        self.assertIsInstance(results, list)
+        self.assertGreater(len(results), 0)
+
+    def test_result_structure(self):
+        results = RecommendationService().get_recommendations(self.user)
+        for item in results:
+            self.assertIn('film', item)
+            self.assertIn('score', item)
+            self.assertIn('reasons', item)
+
+    def test_future_films_excluded(self):
+        results = RecommendationService().get_recommendations(self.user)
+        titles = [r['film'].title for r in results]
+        self.assertNotIn("Future Film", titles)
+
+    def test_mood_boost_action(self):
+        results = RecommendationService().get_recommendations(self.user)
+        titles = [r['film'].title for r in results]
+        self.assertIn("Action Movie", titles)
+        # Action Movie doit être mieux classé que Comedy Film
+        idx_action = titles.index("Action Movie")
+        idx_comedy = titles.index("Comedy Film")
+        self.assertLess(idx_action, idx_comedy)
+
+    def test_limit_respected(self):
+        results = RecommendationService().get_recommendations(self.user, limit=1)
+        self.assertLessEqual(len(results), 1)
+
+    def test_no_poster_excluded(self):
+        Film.objects.create(
+            kinepolis_id="REC004", title="No Poster Film",
+            poster_url="", is_future=False,
+        )
+        results = RecommendationService().get_recommendations(self.user)
+        titles = [r['film'].title for r in results]
+        self.assertNotIn("No Poster Film", titles)
+
+    def test_fallback_reason(self):
+        # Film sans genre correspondant aux préfs → raison fallback
+        genre_other = Genre.objects.create(name="Documentaire")
+        film_other = Film.objects.create(
+            kinepolis_id="REC005", title="Doc Film",
+            poster_url="https://example.com/doc.jpg",
+            is_future=False, tmdb_rating=8.0,
+        )
+        film_other.genres.add(genre_other)
+        results = RecommendationService().get_recommendations(self.user)
+        doc_results = [r for r in results if r['film'].title == "Doc Film"]
+        if doc_results:
+            self.assertIsInstance(doc_results[0]['reasons'], list)

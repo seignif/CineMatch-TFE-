@@ -346,3 +346,143 @@ class TestChangePasswordView(TestCase):
     def test_unauthenticated(self):
         response = APIClient().post(self.url, {}, format="json")
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+# ---------------------------------------------------------------------------
+# BadgeService (US-039 / US-040)
+# ---------------------------------------------------------------------------
+
+from apps.users.badge_service import BadgeService, BADGE_DEFINITIONS
+from apps.matching.models import Match, PlannedOuting, Review
+
+
+def _make_badge_user(email, username):
+    return User.objects.create_user(
+        username=username, email=email, password="pass",
+        first_name="Badge", last_name="User",
+    )
+
+
+class TestBadgeDefinitions(TestCase):
+    def test_seven_badges_defined(self):
+        self.assertEqual(len(BADGE_DEFINITIONS), 7)
+
+    def test_badge_has_required_fields(self):
+        for badge_id, badge in BADGE_DEFINITIONS.items():
+            self.assertIn('id', badge)
+            self.assertIn('name', badge)
+            self.assertIn('tier', badge)
+            self.assertIn('svg_id', badge)
+
+
+class TestGetAllBadgesInfo(TestCase):
+    def setUp(self):
+        self.user = _make_badge_user("badges1@test.com", "badgeuser1")
+
+    def test_returns_seven_badges(self):
+        badges = BadgeService.get_all_badges_info(self.user)
+        self.assertEqual(len(badges), 7)
+
+    def test_all_not_earned_by_default(self):
+        badges = BadgeService.get_all_badges_info(self.user)
+        for badge in badges:
+            self.assertFalse(badge['earned'])
+
+    def test_earned_badge_shown(self):
+        self.user.profile.badges = ['clap_debut']
+        self.user.profile.save()
+        badges = BadgeService.get_all_badges_info(self.user)
+        earned = {b['id']: b['earned'] for b in badges}
+        self.assertTrue(earned['clap_debut'])
+        self.assertFalse(earned['montee_marches'])
+
+
+class TestIsProfileComplete(TestCase):
+    def setUp(self):
+        self.user = _make_badge_user("badges2@test.com", "badgeuser2")
+
+    def test_incomplete_profile(self):
+        self.assertFalse(BadgeService._is_profile_complete(self.user.profile))
+
+    def test_complete_profile_without_films(self):
+        self.user.profile.bio = "Bio"
+        self.user.profile.mood = "rire"
+        self.user.profile.genre_preferences = {"Action": 8}
+        self.user.profile.save()
+        self.assertFalse(BadgeService._is_profile_complete(self.user.profile))
+
+
+class TestGetReputationScore(TestCase):
+    def setUp(self):
+        self.user = _make_badge_user("rep1@test.com", "repuser1")
+        self.reviewer = _make_badge_user("rep2@test.com", "repuser2")
+
+    def test_no_reviews(self):
+        result = BadgeService.get_reputation_score(self.user)
+        self.assertEqual(result['score'], None)
+        self.assertEqual(result['count'], 0)
+        self.assertEqual(result['label'], 'Nouveau')
+
+    def test_fewer_than_three_reviews(self):
+        match = Match.objects.create(
+            user1=self.reviewer, user2=self.user,
+            score_compatibilite=80,
+        )
+        outing = PlannedOuting.objects.create(
+            match=match, proposer=self.reviewer, status='completed',
+        )
+        Review.objects.create(
+            outing=outing, reviewer=self.reviewer, reviewed=self.user,
+            rating=5, would_go_again=True,
+        )
+        result = BadgeService.get_reputation_score(self.user)
+        self.assertEqual(result['count'], 1)
+        self.assertIsNone(result['score'])  # masqué si < 3 avis
+
+    def test_three_reviews_show_score(self):
+        match = Match.objects.create(
+            user1=self.reviewer, user2=self.user,
+            score_compatibilite=80,
+        )
+        outing = PlannedOuting.objects.create(
+            match=match, proposer=self.reviewer, status='completed',
+        )
+        for i in range(3):
+            r = _make_badge_user(f"rev{i}@test.com", f"revuser{i}")
+            Review.objects.create(
+                outing=outing, reviewer=r, reviewed=self.user,
+                rating=5, would_go_again=True,
+            )
+        result = BadgeService.get_reputation_score(self.user)
+        self.assertEqual(result['count'], 3)
+        self.assertIsNotNone(result['score'])
+        self.assertEqual(result['label'], 'Excellent')
+
+
+class TestCheckAndAwardBadges(TestCase):
+    def setUp(self):
+        self.user = _make_badge_user("award1@test.com", "awarduser1")
+        self.other = _make_badge_user("award2@test.com", "awarduser2")
+
+    def test_no_badges_without_match(self):
+        new_badges = BadgeService.check_and_award_badges(self.user)
+        self.assertEqual(new_badges, [])
+
+    def test_clap_debut_awarded_on_match(self):
+        Match.objects.create(
+            user1=self.user, user2=self.other,
+            score_compatibilite=75,
+        )
+        new_badges = BadgeService.check_and_award_badges(self.user)
+        badge_ids = [b['id'] for b in new_badges]
+        self.assertIn('clap_debut', badge_ids)
+
+    def test_badge_not_awarded_twice(self):
+        Match.objects.create(
+            user1=self.user, user2=self.other,
+            score_compatibilite=75,
+        )
+        BadgeService.check_and_award_badges(self.user)
+        new_badges = BadgeService.check_and_award_badges(self.user)
+        badge_ids = [b['id'] for b in new_badges]
+        self.assertNotIn('clap_debut', badge_ids)

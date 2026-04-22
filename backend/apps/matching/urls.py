@@ -4,6 +4,9 @@ from .views import (
     OutingListCreateView, OutingDetailView, OutingConfirmView,
     OutingCancelView, OutingMarkBookedView, UpcomingOutingsView,
     OutingCompleteView, ReviewCreateView,
+    GroupListCreateView, GroupInvitationsView, GroupRespondInvitationView,
+    GroupDetailView, GroupLeaveView, GroupInviteMembersView, GroupMessagesView,
+    FilmVoteView, GroupChooseFilmView,
 )
 
 urlpatterns = [
@@ -24,4 +27,15 @@ urlpatterns = [
     # Avis + statut terminé (US-038)
     path('outings/<int:pk>/complete/', OutingCompleteView.as_view(), name='outing-complete'),
     path('outings/<int:pk>/review/', ReviewCreateView.as_view(), name='outing-review'),
+
+    # Groupes (US-041 / US-042 / US-043)
+    path('groups/', GroupListCreateView.as_view(), name='groups'),
+    path('groups/invitations/', GroupInvitationsView.as_view(), name='group-invitations'),
+    path('groups/<int:pk>/', GroupDetailView.as_view(), name='group-detail'),
+    path('groups/<int:pk>/respond/', GroupRespondInvitationView.as_view(), name='group-respond'),
+    path('groups/<int:pk>/leave/', GroupLeaveView.as_view(), name='group-leave'),
+    path('groups/<int:pk>/invite/', GroupInviteMembersView.as_view(), name='group-invite'),
+    path('groups/<int:pk>/messages/', GroupMessagesView.as_view(), name='group-messages'),
+    path('groups/<int:pk>/vote/', FilmVoteView.as_view(), name='group-vote'),
+    path('groups/<int:pk>/choose-film/', GroupChooseFilmView.as_view(), name='group-choose-film'),
 ]
