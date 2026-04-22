@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Heart, MessageCircle, MapPin, Calendar } from 'lucide-react'
 import { matchingApi, chatApi } from '../services/api'
 import type { Match } from '../types'
+import { mediaUrl } from '../utils/media'
 import ProposeOutingModal from '../components/ProposeOutingModal'
 
 const MOOD_LABELS: Record<string, string> = {
@@ -87,7 +88,7 @@ export default function Matches() {
                 <div className="w-16 h-16 rounded-full overflow-hidden shrink-0 border-2"
                   style={{ borderColor: 'var(--accent-red)' }}>
                   {other.profile?.profile_picture ? (
-                    <img src={other.profile.profile_picture} alt={other.first_name}
+                    <img src={mediaUrl(other.profile.profile_picture)!} alt={other.first_name}
                       className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-2xl font-bold"

@@ -4,6 +4,7 @@ import { ArrowLeft, Send } from 'lucide-react'
 import { useChat } from '../hooks/useChat'
 import { chatApi } from '../services/api'
 import { useAuthStore } from '../store/authStore'
+import { mediaUrl } from '../utils/media'
 import type { Conversation } from '../types'
 
 function formatTime(dateStr: string) {
@@ -66,7 +67,7 @@ export default function ConversationView() {
             <div className="w-9 h-9 rounded-full overflow-hidden border"
               style={{ borderColor: 'var(--accent-red)' }}>
               {other.profile_picture ? (
-                <img src={other.profile_picture} alt={other.first_name} className="w-full h-full object-cover" />
+                <img src={mediaUrl(other.profile_picture)!} alt={other.first_name} className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-sm font-bold"
                   style={{ background: 'var(--bg-card)', color: 'var(--accent-red)' }}>

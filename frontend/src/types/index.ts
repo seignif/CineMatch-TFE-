@@ -100,6 +100,7 @@ export interface CandidateProfile {
   profile_picture: string | null
   mood: string
   genre_preferences: Record<string, number>
+  films_signature: { id: number; title: string; poster_url: string }[]
 }
 
 export interface Candidate {
@@ -192,6 +193,57 @@ export interface FilmRecommendation {
   film: import('./index').Film
   score: number
   reasons: string[]
+}
+
+// ---- Groupes (US-041/042/043) ----
+export interface GroupMemberInfo {
+  id: number
+  user_info: {
+    id: number
+    first_name: string
+    city: string
+    profile_picture: string | null
+  }
+  role: 'admin' | 'member'
+  status: 'pending' | 'accepted' | 'declined'
+  joined_at: string
+}
+
+export interface GroupMessage {
+  id: number
+  sender_id: number
+  sender_name: string
+  content: string
+  is_system: boolean
+  created_at: string
+}
+
+export interface VoteSummary {
+  film: { id: number; title: string; poster_url: string }
+  up: number
+  down: number
+}
+
+export interface Group {
+  id: number
+  name: string
+  status: 'active' | 'archived'
+  creator: number
+  members_info: GroupMemberInfo[]
+  active_member_count: number
+  last_message: {
+    content: string
+    sender_name: string
+    created_at: string
+    is_system: boolean
+  } | null
+  votes_summary: VoteSummary[]
+  chosen_film_info: { id: number; title: string; poster_url: string } | null
+  is_creator: boolean
+  my_invitation_status: 'pending' | 'accepted' | 'declined' | null
+  my_votes: Record<string, 'up' | 'down'>
+  created_at: string
+  updated_at: string
 }
 
 // ---- Chat ----

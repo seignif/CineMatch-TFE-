@@ -1,10 +1,16 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Search, SlidersHorizontal, X, Sparkles } from 'lucide-react'
+import { Search, SlidersHorizontal, X, Sparkles, ChevronDown } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { filmsApi, recommendationsApi } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import FilmCard from '../components/FilmCard'
 import type { Film, PaginatedResponse, FilmRecommendation } from '../types'
+
+const RATINGS = [
+  { value: 6, label: '≥ 6' },
+  { value: 7, label: '≥ 7' },
+  { value: 8, label: '≥ 8' },
+]
 
 function SkeletonCard() {
   return (
@@ -24,14 +30,24 @@ export default function Films() {
   const [totalCount, setTotalCount] = useState(0)
   const [searchInput, setSearchInput] = useState('')
   const [recommendations, setRecommendations] = useState<FilmRecommendation[]>([])
+  const [showFilters, setShowFilters] = useState(false)
+  const [genres, setGenres] = useState<string[]>([])
+  const [selectedGenre, setSelectedGenre] = useState<string>('')
 
-  // Re-fetch recommendations quand le mood change
+  const [selectedRating, setSelectedRating] = useState<number | null>(null)
+
   const currentMood = user?.profile?.mood
   useEffect(() => {
     recommendationsApi.getRecommendations()
       .then(res => setRecommendations(res.data))
       .catch(() => {})
   }, [currentMood])
+
+  useEffect(() => {
+    filmsApi.getGenres()
+      .then(res => setGenres(res.data))
+      .catch(() => {})
+  }, [])
 
   const fetchFilms = useCallback(async () => {
     setLoading(true)
@@ -40,6 +56,8 @@ export default function Films() {
         search: search || undefined,
         is_future: isFuture,
         page,
+        genre: selectedGenre || undefined,
+        min_rating: selectedRating ?? undefined,
       })
       const data: PaginatedResponse<Film> = res.data
       setFilms(data.results)
@@ -49,11 +67,11 @@ export default function Films() {
     } finally {
       setLoading(false)
     }
-  }, [search, isFuture, page])
+  }, [search, isFuture, page, selectedGenre, selectedRating])
 
   useEffect(() => {
     setPage(1)
-  }, [search, isFuture])
+  }, [search, isFuture, selectedGenre, selectedRating])
 
   useEffect(() => {
     fetchFilms()
@@ -69,6 +87,12 @@ export default function Films() {
     setSearch('')
   }
 
+  const clearFilters = () => {
+    setSelectedGenre('')
+    setSelectedRating(null)
+  }
+
+  const activeFilterCount = [selectedGenre, selectedRating !== null].filter(Boolean).length
   const totalPages = Math.ceil(totalCount / 20)
 
   return (
@@ -83,7 +107,7 @@ export default function Films() {
         </p>
       </div>
 
-      {/* Section Recommandations (US-035) */}
+      {/* Recommandations */}
       {recommendations.length > 0 && !search && (
         <div className="mb-10">
           <div className="flex items-center gap-2 mb-4">
@@ -118,9 +142,8 @@ export default function Films() {
         </div>
       )}
 
-      {/* Controls */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-8">
-        {/* Search */}
+      {/* Barre de contrôles */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-3">
         <form onSubmit={handleSearch} className="flex-1 relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
           <input
@@ -138,7 +161,6 @@ export default function Films() {
           )}
         </form>
 
-        {/* Toggle à l'affiche / prochainement */}
         <div className="flex items-center gap-1 glass rounded-lg p-1 shrink-0">
           <button
             onClick={() => { setIsFuture(false); setSearchParams({}) }}
@@ -158,35 +180,118 @@ export default function Films() {
           </button>
         </div>
 
-        <button className="flex items-center gap-2 btn-secondary shrink-0">
+        <button
+          onClick={() => setShowFilters(f => !f)}
+          className={`flex items-center gap-2 shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            showFilters || activeFilterCount > 0
+              ? 'bg-[var(--accent-red)] text-white'
+              : 'btn-secondary'
+          }`}
+        >
           <SlidersHorizontal size={15} />
           Filtres
+          {activeFilterCount > 0 && (
+            <span className="w-5 h-5 rounded-full bg-white/20 text-xs flex items-center justify-center font-bold">
+              {activeFilterCount}
+            </span>
+          )}
+          <ChevronDown size={14} className={`transition-transform ${showFilters ? 'rotate-180' : ''}`} />
         </button>
       </div>
 
-      {/* Actif search */}
-      {search && (
-        <div className="flex items-center gap-2 mb-4">
-          <span className="text-sm text-[var(--text-muted)]">Résultats pour :</span>
-          <span className="badge-red cursor-pointer" onClick={clearSearch}>
-            {search} <X size={10} className="inline ml-1" />
-          </span>
+      {/* Panneau de filtres */}
+      {showFilters && (
+        <div className="glass rounded-xl p-5 mb-5 space-y-5">
+          {/* Genre */}
+          <div>
+            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">Genre</p>
+            <div className="flex flex-wrap gap-2">
+              {genres.map(g => (
+                <button
+                  key={g}
+                  onClick={() => setSelectedGenre(selectedGenre === g ? '' : g)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    selectedGenre === g
+                      ? 'bg-[var(--accent-red)] text-white'
+                      : 'glass text-[var(--text-muted)] hover:text-white'
+                  }`}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Note TMDb */}
+          <div>
+            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">Note TMDb minimum</p>
+            <div className="flex gap-2">
+              {RATINGS.map(({ value, label }) => (
+                <button
+                  key={value}
+                  onClick={() => setSelectedRating(selectedRating === value ? null : value)}
+                  className={`px-4 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    selectedRating === value
+                      ? 'bg-[var(--accent-red)] text-white'
+                      : 'glass text-[var(--text-muted)] hover:text-white'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {activeFilterCount > 0 && (
+            <button onClick={clearFilters}
+              className="text-xs text-[var(--text-muted)] hover:text-white underline transition-colors">
+              Réinitialiser les filtres
+            </button>
+          )}
         </div>
       )}
 
-      {/* Grid */}
+      {/* Badges filtres actifs */}
+      {(search || activeFilterCount > 0) && (
+        <div className="flex flex-wrap items-center gap-2 mb-5">
+          {search && (
+            <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs cursor-pointer"
+              style={{ background: 'rgba(230,57,70,0.15)', border: '1px solid rgba(230,57,70,0.3)', color: 'var(--text-primary)' }}
+              onClick={clearSearch}>
+              "{search}" <X size={10} />
+            </span>
+          )}
+          {selectedGenre && (
+            <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs cursor-pointer"
+              style={{ background: 'rgba(230,57,70,0.15)', border: '1px solid rgba(230,57,70,0.3)', color: 'var(--text-primary)' }}
+              onClick={() => setSelectedGenre('')}>
+              {selectedGenre} <X size={10} />
+            </span>
+          )}
+
+          {selectedRating !== null && (
+            <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs cursor-pointer"
+              style={{ background: 'rgba(230,57,70,0.15)', border: '1px solid rgba(230,57,70,0.3)', color: 'var(--text-primary)' }}
+              onClick={() => setSelectedRating(null)}>
+              ★ ≥ {selectedRating} <X size={10} />
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Grille */}
       {loading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {Array.from({ length: 20 }).map((_, i) => <SkeletonCard key={i} />)}
         </div>
       ) : films.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
-          <span className="font-display text-6xl text-[var(--accent-red)] mb-4">404</span>
-          <p className="text-white font-medium text-lg">Aucun film trouvé</p>
-          <p className="text-[var(--text-muted)] text-sm mt-1">Essaie un autre terme de recherche</p>
-          {search && (
-            <button onClick={clearSearch} className="btn-primary mt-6">
-              Voir tous les films
+          <div className="text-6xl mb-4">🎬</div>
+          <p className="text-white font-semibold text-lg">Aucun film trouvé</p>
+          <p className="text-[var(--text-muted)] text-sm mt-1">Essaie d'autres filtres ou termes de recherche</p>
+          {(search || activeFilterCount > 0) && (
+            <button onClick={() => { clearSearch(); clearFilters() }} className="btn-primary mt-6">
+              Réinitialiser les filtres
             </button>
           )}
         </div>

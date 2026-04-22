@@ -51,11 +51,18 @@ api.interceptors.response.use(
 )
 
 export const filmsApi = {
-  getAll: (params?: { search?: string; is_future?: boolean; page?: number }) =>
-    api.get('/films/films/', { params }),
+  getAll: (params?: {
+    search?: string
+    is_future?: boolean
+    page?: number
+    genre?: string
+    language?: string
+    min_rating?: number
+  }) => api.get('/films/films/', { params }),
   getById: (id: number) => api.get(`/films/films/${id}/`),
   getSeances: (id: number) => api.get(`/films/films/${id}/seances/`),
   tmdbSearch: (q: string) => api.get('/films/films/tmdb-search/', { params: { q } }),
+  getGenres: () => api.get('/films/films/genres/'),
 }
 
 export const badgesApi = {
@@ -119,6 +126,26 @@ export const outingsApi = {
   cancel: (id: number) => api.put(`/matching/outings/${id}/cancel/`),
   markBooked: (id: number) => api.put(`/matching/outings/${id}/booked/`),
   complete: (id: number) => api.put(`/matching/outings/${id}/complete/`),
+}
+
+export const groupsApi = {
+  getAll: () => api.get('/matching/groups/'),
+  getInvitations: () => api.get('/matching/groups/invitations/'),
+  getById: (id: number) => api.get(`/matching/groups/${id}/`),
+  update: (id: number, data: { name: string }) =>
+    api.patch(`/matching/groups/${id}/`, data),
+  create: (data: { name?: string; member_ids: number[] }) =>
+    api.post('/matching/groups/', data),
+  respond: (id: number, action: 'accept' | 'decline') =>
+    api.post(`/matching/groups/${id}/respond/`, { action }),
+  leave: (id: number) => api.post(`/matching/groups/${id}/leave/`),
+  getMessages: (id: number) => api.get(`/matching/groups/${id}/messages/`),
+  vote: (id: number, film_id: number, vote: 'up' | 'down') =>
+    api.post(`/matching/groups/${id}/vote/`, { film_id, vote }),
+  chooseFilm: (id: number, film_id: number) =>
+    api.post(`/matching/groups/${id}/choose-film/`, { film_id }),
+  invite: (id: number, member_ids: number[]) =>
+    api.post(`/matching/groups/${id}/invite/`, { member_ids }),
 }
 
 export const chatApi = {

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { MessageCircle } from 'lucide-react'
 import { chatApi } from '../services/api'
 import type { Conversation } from '../types'
+import { mediaUrl } from '../utils/media'
 
 function timeAgo(dateStr: string) {
   const diff = Date.now() - new Date(dateStr).getTime()
@@ -71,7 +72,7 @@ export default function Chat() {
                   <div className="w-12 h-12 rounded-full overflow-hidden border-2"
                     style={{ borderColor: 'var(--accent-red)' }}>
                     {other.profile_picture ? (
-                      <img src={other.profile_picture} alt={other.first_name}
+                      <img src={mediaUrl(other.profile_picture)!} alt={other.first_name}
                         className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-xl font-bold"
