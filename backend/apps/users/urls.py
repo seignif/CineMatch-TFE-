@@ -11,6 +11,10 @@ urlpatterns = [
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/change-password/', views.ChangePasswordView.as_view(), name='change_password'),
 
+    # US-065 : Vérification email
+    path('auth/verify-email/<uuid:token>/', views.VerifyEmailView.as_view(), name='verify_email'),
+    path('auth/resend-verification/', views.ResendVerificationView.as_view(), name='resend_verification'),
+
     # Profil utilisateur
     path('users/me/', views.MeView.as_view(), name='me'),
     path('users/me/profile/', views.UpdateProfileView.as_view(), name='update_profile'),

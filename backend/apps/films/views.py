@@ -3,17 +3,21 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from django.conf import settings
-from rest_framework import viewsets
+from django.db import models as db_models
+from django.utils import timezone
+from rest_framework import generics, viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
 
-from .models import Cinema, Film, Seance
+from .models import Cinema, Film, Seance, WatchedFilm
 from .serializers import (
     CinemaSerializer,
     FilmDetailSerializer,
     FilmSerializer,
+    PublicWatchedFilmSerializer,
     SeanceSerializer,
+    WatchedFilmSerializer,
 )
 
 
@@ -35,6 +39,11 @@ class FilmViewSet(viewsets.ReadOnlyModelViewSet):
         qs = super().get_queryset()
         params = self.request.query_params
 
+        # Masquer événements spéciaux par défaut (opéras, concerts…)
+        show_events = params.get('show_events', 'false')
+        if show_events != 'true':
+            qs = qs.filter(is_special_event=False)
+
         is_future = params.get('is_future')
         if is_future is not None:
             qs = qs.filter(is_future=is_future.lower() in ('true', '1'))
@@ -54,6 +63,16 @@ class FilmViewSet(viewsets.ReadOnlyModelViewSet):
             except ValueError:
                 pass
 
+        max_age = params.get('max_age')
+        if max_age:
+            try:
+                qs = qs.filter(
+                    db_models.Q(min_age__lte=int(max_age)) |
+                    db_models.Q(min_age__isnull=True)
+                )
+            except ValueError:
+                pass
+
         return qs.distinct()
 
     @action(detail=False, url_path='genres', permission_classes=[AllowAny])
@@ -65,7 +84,22 @@ class FilmViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, url_path='seances')
     def seances(self, request, pk=None):
         film = self.get_object()
-        seances = Seance.objects.filter(film=film).select_related('cinema').order_by('showtime')
+        seances = (
+            Seance.objects
+            .filter(film=film, showtime__gte=timezone.now())
+            .select_related('cinema')
+            .order_by('showtime')
+        )
+        cinema_id = request.query_params.get('cinema')
+        if cinema_id:
+            seances = seances.filter(cinema__kinepolis_id=cinema_id)
+
+        lang_filter = request.query_params.get('language')
+        if lang_filter == 'vf':
+            seances = seances.filter(language__in=['FR', 'NL'])
+        elif lang_filter == 'vo':
+            seances = seances.exclude(language__in=['FR', 'NL'])
+
         serializer = SeanceSerializer(seances, many=True)
         return Response(serializer.data)
 
@@ -107,6 +141,57 @@ class FilmViewSet(viewsets.ReadOnlyModelViewSet):
             results.append(FilmSerializer(film).data)
 
         return Response(results)
+
+
+class WatchedFilmViewSet(viewsets.ModelViewSet):
+    """US-063 : Journal personnel de films vus."""
+    permission_classes = [IsAuthenticated]
+    serializer_class = WatchedFilmSerializer
+    http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
+
+    def get_queryset(self):
+        return WatchedFilm.objects.filter(
+            user=self.request.user
+        ).select_related('film').prefetch_related('film__genres')
+
+    def perform_create(self, serializer):
+        from .models import Film as FilmModel
+        film_id = self.request.data.get('film_id')
+        film = FilmModel.objects.get(id=film_id)
+        serializer.save(user=self.request.user, film=film)
+
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        from django.db.models import Avg
+        from apps.films.models import Genre
+        qs = WatchedFilm.objects.filter(user=request.user)
+        total = qs.count()
+        avg_rating = qs.filter(rating__isnull=False).aggregate(avg=Avg('rating'))['avg']
+        top_genre = (
+            Genre.objects
+            .filter(film__watched_by__user=request.user)
+            .annotate(count=db_models.Count('id'))
+            .order_by('-count')
+            .first()
+        )
+        return Response({
+            'total_watched': total,
+            'average_rating': round(avg_rating, 1) if avg_rating else None,
+            'top_genre': top_genre.name if top_genre else None,
+        })
+
+
+class FilmReviewsView(generics.ListAPIView):
+    """US-064 : Avis publics sur un film."""
+    permission_classes = [IsAuthenticatedOrReadOnly]
+    serializer_class = PublicWatchedFilmSerializer
+
+    def get_queryset(self):
+        return WatchedFilm.objects.filter(
+            film_id=self.kwargs['pk'],
+            is_public=True,
+            rating__isnull=False,
+        ).select_related('user__profile').order_by('-created_at')
 
 
 class CinemaViewSet(viewsets.ReadOnlyModelViewSet):

@@ -56,13 +56,30 @@ export const filmsApi = {
     is_future?: boolean
     page?: number
     genre?: string
-    language?: string
     min_rating?: number
+    show_events?: string
+    max_age?: string
   }) => api.get('/films/films/', { params }),
   getById: (id: number) => api.get(`/films/films/${id}/`),
-  getSeances: (id: number) => api.get(`/films/films/${id}/seances/`),
+  getSeances: (id: number, params?: { language?: string }) =>
+    api.get(`/films/films/${id}/seances/`, { params }),
   tmdbSearch: (q: string) => api.get('/films/films/tmdb-search/', { params: { q } }),
   getGenres: () => api.get('/films/films/genres/'),
+  getReviews: (filmId: number) => api.get(`/films/films/${filmId}/reviews/`),
+}
+
+export const watchedApi = {
+  getAll: () => api.get('/films/watched/'),
+  getStats: () => api.get('/films/watched/stats/'),
+  create: (data: {
+    film_id: number
+    rating?: number | null
+    review?: string
+    watched_date?: string | null
+    is_public?: boolean
+  }) => api.post('/films/watched/', data),
+  update: (id: number, data: object) => api.patch(`/films/watched/${id}/`, data),
+  delete: (id: number) => api.delete(`/films/watched/${id}/`),
 }
 
 export const badgesApi = {
@@ -87,6 +104,8 @@ export const authApi = {
   register: (data: object) => api.post('/auth/register/', data),
   login: (data: object) => api.post('/auth/login/', data),
   logout: (refresh: string) => api.post('/auth/logout/', { refresh }),
+  verifyEmail: (token: string) => api.get(`/auth/verify-email/${token}/`),
+  resendVerification: () => api.post('/auth/resend-verification/'),
 }
 
 export const usersApi = {

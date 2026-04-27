@@ -11,6 +11,22 @@ logger = logging.getLogger(__name__)
 
 _SCRAPER_SCRIPT = os.path.join(os.path.dirname(__file__), "_kinepolis_scraper.py")
 
+SPECIAL_EVENT_KEYWORDS = [
+    'opera ', 'opéra ', 'concert:', 'concert :', 'nt live',
+    'exhibition', 'stand-up', 'stand-up', 'docu:', 'sport:',
+    'film & facts', 'seniors:', 'anime:', 'ap:', 'avant-première:',
+    'double bill', 'marathon', 'collector', 'de mol', 'filmquiz',
+    'opera live', 'opera reprise', 'opéra reprise', 'laura laune',
+    'paul mirabel', 'artus', 'julien doré', 'johnny hallyday',
+    'santa -', 'bring me', 'alain souchon', 'bluey', 'peppa',
+    'operalive', 'casting', 'spectacle',
+]
+
+
+def _is_special_event(title: str) -> bool:
+    title_lower = title.lower()
+    return any(kw in title_lower for kw in SPECIAL_EVENT_KEYWORDS)
+
 CDN_BASE = "https://cdn.kinepolis.be"
 BOOKING_BASE = "https://kinepolis.be/fr/direct-vista-redirect"
 
@@ -149,12 +165,15 @@ class KinepolisService:
         final_poster = poster_url if not (existing and existing.poster_url) else existing.poster_url
         final_backdrop = backdrop_url if not (existing and existing.backdrop_url) else existing.backdrop_url
 
+        title = film_data.get("title") or film_data.get("name", "")
+        min_age = film_data.get("censor", {}).get("minimumAge") if film_data.get("censor") else None
+
         film, _ = Film.objects.update_or_create(
             kinepolis_id=film_id,
             defaults={
                 "corporate_id": film_data.get("corporateId"),
                 "imdb_code": film_data.get("imdbCode", ""),
-                "title": film_data.get("title") or film_data.get("name", ""),
+                "title": title,
                 "synopsis": film_data.get("synopsis", ""),
                 "short_synopsis": film_data.get("shortSynopsis", ""),
                 "duration": film_data.get("duration"),
@@ -164,6 +183,8 @@ class KinepolisService:
                 "is_future": film_data.get("showAsFutureRelease", False),
                 "poster_url": final_poster,
                 "backdrop_url": final_backdrop,
+                "is_special_event": _is_special_event(title),
+                "min_age": min_age,
             },
         )
 

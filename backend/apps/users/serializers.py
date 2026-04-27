@@ -48,6 +48,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'bio', 'profile_picture', 'mood',
             'genre_preferences', 'films_signature',
             'badges', 'stats',
+            'language_preference', 'latitude', 'longitude', 'search_radius_km',
         ]
 
 
@@ -58,9 +59,9 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'email', 'username', 'first_name', 'last_name',
-            'date_of_birth', 'city', 'profile',
+            'date_of_birth', 'city', 'profile', 'is_email_verified',
         ]
-        read_only_fields = ['id', 'email']
+        read_only_fields = ['id', 'email', 'is_email_verified']
 
 
 class UpdateProfileSerializer(serializers.ModelSerializer):
@@ -73,7 +74,10 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserProfile
-        fields = ['bio', 'mood', 'genre_preferences', 'films_signature_ids']
+        fields = [
+            'bio', 'mood', 'genre_preferences', 'films_signature_ids',
+            'language_preference', 'latitude', 'longitude', 'search_radius_km',
+        ]
 
     def validate_films_signature_ids(self, value):
         if len(value) > 5:

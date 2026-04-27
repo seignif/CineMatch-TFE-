@@ -38,6 +38,7 @@ export default function Navbar() {
     { to: '/outings', label: 'Sorties', icon: Calendar, badge: upcomingOutings },
     { to: '/groups', label: 'Groupes', icon: Users, badge: pendingInvitations },
     { to: '/chat', label: 'Messages', icon: MessageCircle, badge: unread },
+    { to: '/journal', label: 'Journal', icon: Film, badge: 0 },
   ]
 
   return (

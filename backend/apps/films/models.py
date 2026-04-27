@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -46,6 +47,8 @@ class Film(models.Model):
     backdrop_url = models.URLField(blank=True)
     trailer_youtube_key = models.CharField(max_length=50, blank=True)
     tmdb_rating = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    is_special_event = models.BooleanField(default=False)
+    min_age = models.IntegerField(null=True, blank=True)
     genres = models.ManyToManyField(Genre, blank=True)
     last_sync = models.DateTimeField(auto_now=True)
 
@@ -84,3 +87,30 @@ class Seance(models.Model):
 
     def __str__(self):
         return f"{self.film.title} @ {self.cinema.name} - {self.showtime}"
+
+
+class WatchedFilm(models.Model):
+    """US-063 : Journal personnel de films vus."""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='watched_films',
+    )
+    film = models.ForeignKey(Film, on_delete=models.CASCADE, related_name='watched_by')
+    watched_date = models.DateField(null=True, blank=True)
+    rating = models.IntegerField(
+        null=True, blank=True,
+        choices=[(i, str(i)) for i in range(1, 6)],
+    )
+    review = models.TextField(blank=True)
+    is_public = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'films_watched_film'
+        unique_together = ['user', 'film']
+        ordering = ['-watched_date', '-created_at']
+
+    def __str__(self):
+        return f"{self.user} → {self.film.title} ({self.rating})"
