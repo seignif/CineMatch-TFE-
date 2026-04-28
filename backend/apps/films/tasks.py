@@ -50,7 +50,9 @@ def enrich_tmdb_films(self):
     try:
         from apps.films.services.tmdb_service import TMDbService
 
-        result = TMDbService().enrich_all()
+        svc = TMDbService()
+        svc.sync_genres()  # s'assure que les genres TMDb ont leur tmdb_id en DB
+        result = svc.enrich_all()
         logger.info(
             f"[Celery] Enrichissement TMDb termine: "
             f"{result['enriched']} enrichis, {result['failed']} echoues sur {result['total']}"
