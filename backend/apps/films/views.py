@@ -73,7 +73,18 @@ class FilmViewSet(viewsets.ReadOnlyModelViewSet):
             except ValueError:
                 pass
 
-        return qs.distinct()
+        is_future_param = params.get('is_future')
+        qs = qs.distinct()
+
+        if is_future_param is not None:
+            if is_future_param.lower() in ('true', '1'):
+                # Bientôt : tri par date de sortie croissante
+                return qs.order_by('release_date')
+            else:
+                # À l'affiche : masquer les films sans séance à venir
+                return qs.filter(seances__showtime__gte=timezone.now()).distinct()
+
+        return qs
 
     @action(detail=False, url_path='genres', permission_classes=[AllowAny])
     def genres(self, request):
@@ -128,16 +139,22 @@ class FilmViewSet(viewsets.ReadOnlyModelViewSet):
         for item in resp.json().get('results', [])[:10]:
             tmdb_id = item['id']
             poster = f"https://image.tmdb.org/t/p/w500{item['poster_path']}" if item.get('poster_path') else ''
-            film, _ = Film.objects.get_or_create(
-                kinepolis_id=f'tmdb_{tmdb_id}',
-                defaults={
-                    'title': item.get('title', ''),
-                    'tmdb_id': tmdb_id,
-                    'poster_url': poster,
-                    'synopsis': item.get('overview', ''),
-                    'release_date': item.get('release_date') or None,
-                },
+            # Chercher d'abord par tmdb_id (film Kinepolis déjà enrichi)
+            # puis par kinepolis_id tmdb_ (film signature déjà créé)
+            # sinon créer
+            film = (
+                Film.objects.filter(tmdb_id=tmdb_id).first()
+                or Film.objects.filter(kinepolis_id=f'tmdb_{tmdb_id}').first()
             )
+            if film is None:
+                film = Film.objects.create(
+                    kinepolis_id=f'tmdb_{tmdb_id}',
+                    title=item.get('title', ''),
+                    tmdb_id=tmdb_id,
+                    poster_url=poster,
+                    synopsis=item.get('overview', ''),
+                    release_date=item.get('release_date') or None,
+                )
             results.append(FilmSerializer(film).data)
 
         return Response(results)

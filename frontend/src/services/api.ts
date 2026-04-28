@@ -63,7 +63,7 @@ export const filmsApi = {
   getById: (id: number) => api.get(`/films/films/${id}/`),
   getSeances: (id: number, params?: { language?: string }) =>
     api.get(`/films/films/${id}/seances/`, { params }),
-  tmdbSearch: (q: string) => api.get('/films/films/tmdb-search/', { params: { q } }),
+  tmdbSearch: (q: string, signal?: AbortSignal) => api.get('/films/films/tmdb-search/', { params: { q }, signal }),
   getGenres: () => api.get('/films/films/genres/'),
   getReviews: (filmId: number) => api.get(`/films/films/${filmId}/reviews/`),
 }

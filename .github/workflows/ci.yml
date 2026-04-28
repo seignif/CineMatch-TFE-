@@ -50,7 +50,6 @@ jobs:
       CELERY_RESULT_BACKEND: redis://localhost:6379/1
       TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
       RESEND_API_KEY: fake-resend-key
-      ANTHROPIC_API_KEY: fake-anthropic-key
       FRONTEND_URL: http://localhost:5173
 
     steps:

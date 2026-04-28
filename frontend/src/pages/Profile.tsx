@@ -84,19 +84,24 @@ export default function Profile() {
     }
   }, [tab, user])
 
-  // Recherche TMDb debounced
+  // Recherche TMDb debounced — ref pour ignorer les résultats obsolètes
+  const latestFilmQuery = useRef('')
   useEffect(() => {
     if (!filmQuery.trim()) { setFilmResults([]); return }
+    latestFilmQuery.current = filmQuery
+    const controller = new AbortController()
     const t = setTimeout(async () => {
       setSearchingFilms(true)
       try {
-        const res = await filmsApi.tmdbSearch(filmQuery)
-        setFilmResults(res.data)
+        const res = await filmsApi.tmdbSearch(filmQuery, controller.signal)
+        if (latestFilmQuery.current === filmQuery) setFilmResults(res.data)
+      } catch {
+        // requête annulée ou erreur réseau
       } finally {
-        setSearchingFilms(false)
+        if (latestFilmQuery.current === filmQuery) setSearchingFilms(false)
       }
-    }, 400)
-    return () => clearTimeout(t)
+    }, 600)
+    return () => { clearTimeout(t); controller.abort() }
   }, [filmQuery])
 
   const showSuccess = (msg: string) => {
