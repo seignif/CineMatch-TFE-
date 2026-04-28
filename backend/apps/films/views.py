@@ -155,6 +155,21 @@ class FilmViewSet(viewsets.ReadOnlyModelViewSet):
                     synopsis=item.get('overview', ''),
                     release_date=item.get('release_date') or None,
                 )
+                # Assigner les genres depuis TMDb genre_ids
+                from .models import Genre
+                genre_ids = item.get('genre_ids', [])
+                if genre_ids:
+                    genres = Genre.objects.filter(tmdb_id__in=genre_ids)
+                    if genres.exists():
+                        film.genres.set(genres)
+            elif not film.genres.exists():
+                # Film existant sans genres → essayer d'assigner
+                from .models import Genre
+                genre_ids = item.get('genre_ids', [])
+                if genre_ids:
+                    genres = Genre.objects.filter(tmdb_id__in=genre_ids)
+                    if genres.exists():
+                        film.genres.set(genres)
             results.append(FilmSerializer(film).data)
 
         return Response(results)

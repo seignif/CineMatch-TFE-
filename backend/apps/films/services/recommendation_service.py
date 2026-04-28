@@ -22,9 +22,11 @@ class RecommendationService:
                 kinepolis_id__startswith='tmdb_'
             ).filter(poster_url__gt='').order_by('-tmdb_rating')[:limit])
 
-        genre_prefs  = profile.genre_preferences or {}
+        # Normaliser les clés en minuscules pour éviter les mismatches de casse
+        raw_prefs    = profile.genre_preferences or {}
+        genre_prefs  = {k.lower(): v for k, v in raw_prefs.items()}
         mood         = profile.mood or ''
-        mood_genres  = MOOD_GENRE_BOOST.get(mood, [])
+        mood_genres  = [g.lower() for g in MOOD_GENRE_BOOST.get(mood, [])]
 
         # Genres des films signature → poids supplémentaire
         signature_films   = list(profile.films_signature.prefetch_related('genres').all())
@@ -59,9 +61,9 @@ class RecommendationService:
             reasons = []
             film_genre_names = [g.name for g in film.genres.all()]
 
-            # 1. Genres préférés
+            # 1. Genres préférés (comparaison insensible à la casse)
             for genre_name in film_genre_names:
-                pref = genre_prefs.get(genre_name, 0)
+                pref = genre_prefs.get(genre_name.lower(), 0)
                 if pref > 0:
                     score += pref * 5
                     if pref >= 7 and len(reasons) < 2 and f"Vous adorez {genre_name}" not in reasons:
@@ -81,9 +83,9 @@ class RecommendationService:
             if best_sig_title:
                 reasons.insert(0, f"Similaire à {best_sig_title}")
 
-            # 3. Mood du moment
+            # 3. Mood du moment (insensible à la casse)
             for genre_name in film_genre_names:
-                if genre_name in mood_genres:
+                if genre_name.lower() in mood_genres:
                     score += 20
                     if 'Correspond à votre mood' not in reasons and len(reasons) < 2:
                         reasons.append('Correspond à votre mood')
