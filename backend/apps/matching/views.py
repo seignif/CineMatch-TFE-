@@ -51,14 +51,27 @@ class CandidatesView(APIView):
             [:50]
         )
 
+        # Rayon de filtre si l'utilisateur a une position GPS
+        user_profile = user.profile
+        user_radius = float(user_profile.search_radius_km or 50)
+        user_has_location = bool(user_profile.latitude and user_profile.longitude)
+
         results = []
         for candidate in candidates:
+            distance_km = algorithm.get_distance_km(user, candidate)
+
+            # Filtre par rayon uniquement si les deux utilisateurs ont une position GPS
+            if user_has_location and candidate.profile.latitude and candidate.profile.longitude:
+                if distance_km is not None and distance_km > user_radius:
+                    continue
+
             score, reasons = algorithm.calculate_compatibility(user, candidate)
             results.append({
                 'candidate': candidate,
                 'score': score,
                 'reasons': reasons,
                 'superliked_me': candidate.id in superliked_me_ids,
+                'distance_km': distance_km,
             })
 
         # Superlikes d'abord, puis par score décroissant
@@ -71,6 +84,7 @@ class CandidatesView(APIView):
             c.score = item['score']
             c.reasons = item['reasons']
             c.superliked_me = item['superliked_me']
+            c.distance_km = item['distance_km']
             serialized.append(CandidateSerializer(c, context={'request': request}).data)
 
         return Response(serialized)

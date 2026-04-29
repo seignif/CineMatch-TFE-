@@ -94,6 +94,9 @@ function ProfileModal({ candidate, onClose }: { candidate: Candidate; onClose: (
             {candidate.city && (
               <div className="flex items-center gap-1 text-white/70 text-sm mt-0.5">
                 <MapPin size={12} />{candidate.city}
+                {candidate.distance_km != null && (
+                  <span className="ml-1 opacity-80">· à ~{candidate.distance_km} km</span>
+                )}
               </div>
             )}
           </div>
@@ -385,6 +388,9 @@ export default function Matching() {
                     {c.city && (
                       <div className="flex items-center gap-1 text-[var(--text-muted)] text-sm mb-2">
                         <MapPin size={12} />{c.city}
+                        {c.distance_km != null && (
+                          <span className="ml-1">· à ~{c.distance_km} km</span>
+                        )}
                       </div>
                     )}
                     <ScoreBar score={c.score} />

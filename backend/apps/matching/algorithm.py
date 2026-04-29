@@ -120,6 +120,19 @@ class MatchingAlgorithm:
         except Exception:
             return 50.0
 
+    def get_distance_km(self, user1, user2) -> float | None:
+        """Retourne la distance en km entre deux utilisateurs, ou None si indisponible."""
+        try:
+            p1, p2 = user1.profile, user2.profile
+            if all([p1.latitude, p1.longitude, p2.latitude, p2.longitude]):
+                return round(self._haversine(
+                    float(p1.latitude), float(p1.longitude),
+                    float(p2.latitude), float(p2.longitude),
+                ), 1)
+        except Exception:
+            pass
+        return None
+
     def _haversine(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         """Distance en km entre deux coordonnées GPS."""
         R = 6371

@@ -119,6 +119,7 @@ export interface Candidate {
   score: number
   reasons: string[]
   superliked_me: boolean
+  distance_km: number | null
 }
 
 export interface Match {
