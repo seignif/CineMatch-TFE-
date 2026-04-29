@@ -53,7 +53,7 @@ class CandidatesView(APIView):
 
         # Rayon de filtre si l'utilisateur a une position GPS
         user_profile = user.profile
-        user_radius = float(user_profile.search_radius_km or 50)
+        user_radius = float(user_profile.search_radius_km or 300)
         user_has_location = bool(user_profile.latitude and user_profile.longitude)
 
         results = []

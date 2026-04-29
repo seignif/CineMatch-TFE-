@@ -392,11 +392,11 @@ export default function Profile() {
                 <span>Rayon de recherche</span>
                 <span className="font-medium text-white">{searchRadius} km</span>
               </div>
-              <input type="range" min={5} max={50} step={5} value={searchRadius}
+              <input type="range" min={5} max={300} step={5} value={searchRadius}
                 onChange={e => setSearchRadius(Number(e.target.value))}
                 className="w-full accent-[var(--accent-red)]" />
               <div className="flex justify-between text-xs text-[var(--text-muted)] mt-1">
-                <span>5 km</span><span>15 km</span><span>30 km</span><span>50 km</span>
+                <span>5 km</span><span>75 km</span><span>150 km</span><span>300 km</span>
               </div>
             </div>
           </div>
