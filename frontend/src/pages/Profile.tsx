@@ -70,8 +70,8 @@ export default function Profile() {
       setGenrePrefs(user.profile?.genre_preferences || {})
       setFilmsSignature(user.profile?.films_signature || [])
       setLangPref(user.profile?.language_preference || 'both')
-      setLatitude(user.profile?.latitude ?? null)
-      setLongitude(user.profile?.longitude ?? null)
+      setLatitude(user.profile?.latitude != null ? Number(user.profile.latitude) : null)
+      setLongitude(user.profile?.longitude != null ? Number(user.profile.longitude) : null)
       setSearchRadius(user.profile?.search_radius_km ?? 15)
     }
   }, [user])
