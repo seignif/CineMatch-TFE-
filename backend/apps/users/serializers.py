@@ -71,6 +71,13 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False,
     )
+    # Overrider avec max_digits suffisant pour accepter la précision GPS du navigateur
+    latitude = serializers.DecimalField(
+        max_digits=18, decimal_places=15, allow_null=True, required=False
+    )
+    longitude = serializers.DecimalField(
+        max_digits=18, decimal_places=15, allow_null=True, required=False
+    )
 
     class Meta:
         model = UserProfile
