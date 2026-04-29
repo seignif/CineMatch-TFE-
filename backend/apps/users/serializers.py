@@ -79,6 +79,12 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
             'language_preference', 'latitude', 'longitude', 'search_radius_km',
         ]
 
+    def validate_latitude(self, value):
+        return round(float(value), 6) if value is not None else None
+
+    def validate_longitude(self, value):
+        return round(float(value), 6) if value is not None else None
+
     def validate_films_signature_ids(self, value):
         if len(value) > 5:
             raise serializers.ValidationError("Maximum 5 films signature autorisés.")
