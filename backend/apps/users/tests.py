@@ -3,7 +3,8 @@ from rest_framework import status
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from apps.users.models import ProfileFilmSignature, User, UserProfile
+from apps.users.models import EmailVerificationToken, ProfileFilmSignature, User, UserProfile
+from apps.users.email_service import EmailService
 
 
 # ---------------------------------------------------------------------------
@@ -486,3 +487,98 @@ class TestCheckAndAwardBadges(TestCase):
         new_badges = BadgeService.check_and_award_badges(self.user)
         badge_ids = [b['id'] for b in new_badges]
         self.assertNotIn('clap_debut', badge_ids)
+
+
+# ---------------------------------------------------------------------------
+# Email Verification (US-065)
+# ---------------------------------------------------------------------------
+
+import uuid
+from datetime import timedelta
+from django.utils import timezone
+
+
+class TestEmailService(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username="verifyuser", email="verify@example.com", password="pass",
+            first_name="Verify", last_name="User",
+        )
+
+    def test_verify_token_valid(self):
+        token_obj = EmailVerificationToken.objects.create(
+            user=self.user,
+            token=uuid.uuid4(),
+            expires_at=timezone.now() + timedelta(hours=24),
+        )
+        success, message = EmailService.verify_token(str(token_obj.token))
+        self.assertTrue(success)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_email_verified)
+
+    def test_verify_token_expired(self):
+        token_obj = EmailVerificationToken.objects.create(
+            user=self.user,
+            token=uuid.uuid4(),
+            expires_at=timezone.now() - timedelta(hours=1),
+        )
+        success, _ = EmailService.verify_token(str(token_obj.token))
+        self.assertFalse(success)
+
+    def test_verify_token_invalid(self):
+        success, message = EmailService.verify_token(str(uuid.uuid4()))
+        self.assertFalse(success)
+        self.assertIn("invalide", message)
+
+    def test_token_deleted_after_verification(self):
+        token_obj = EmailVerificationToken.objects.create(
+            user=self.user,
+            token=uuid.uuid4(),
+            expires_at=timezone.now() + timedelta(hours=24),
+        )
+        EmailService.verify_token(str(token_obj.token))
+        self.assertFalse(EmailVerificationToken.objects.filter(user=self.user).exists())
+
+
+class TestVerifyEmailView(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="verifyview", email="verifyview@example.com", password="pass",
+            first_name="V", last_name="U",
+        )
+
+    def test_verify_valid_token(self):
+        token_obj = EmailVerificationToken.objects.create(
+            user=self.user,
+            token=uuid.uuid4(),
+            expires_at=timezone.now() + timedelta(hours=24),
+        )
+        response = self.client.get(f"/api/auth/verify-email/{token_obj.token}/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_verify_invalid_token(self):
+        response = self.client.get(f"/api/auth/verify-email/{uuid.uuid4()}/")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class TestResendVerificationView(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="resenduser", email="resend@example.com", password="pass",
+            first_name="R", last_name="U",
+        )
+        token = RefreshToken.for_user(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {token.access_token}")
+
+    def test_resend_when_not_verified(self):
+        response = self.client.post("/api/auth/resend-verification/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_resend_when_already_verified(self):
+        self.user.is_email_verified = True
+        self.user.save()
+        response = self.client.post("/api/auth/resend-verification/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("déjà vérifié", response.data.get("message", ""))
