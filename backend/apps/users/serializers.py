@@ -48,6 +48,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'bio', 'profile_picture', 'mood',
             'genre_preferences', 'films_signature',
             'badges', 'stats',
+            'language_preference', 'latitude', 'longitude', 'search_radius_km',
         ]
 
 
@@ -58,9 +59,9 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'email', 'username', 'first_name', 'last_name',
-            'date_of_birth', 'city', 'profile',
+            'date_of_birth', 'city', 'profile', 'is_email_verified',
         ]
-        read_only_fields = ['id', 'email']
+        read_only_fields = ['id', 'email', 'is_email_verified']
 
 
 class UpdateProfileSerializer(serializers.ModelSerializer):
@@ -70,10 +71,26 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False,
     )
+    # Overrider avec max_digits suffisant pour accepter la précision GPS du navigateur
+    latitude = serializers.DecimalField(
+        max_digits=18, decimal_places=15, allow_null=True, required=False
+    )
+    longitude = serializers.DecimalField(
+        max_digits=18, decimal_places=15, allow_null=True, required=False
+    )
 
     class Meta:
         model = UserProfile
-        fields = ['bio', 'mood', 'genre_preferences', 'films_signature_ids']
+        fields = [
+            'bio', 'mood', 'genre_preferences', 'films_signature_ids',
+            'language_preference', 'latitude', 'longitude', 'search_radius_km',
+        ]
+
+    def validate_latitude(self, value):
+        return round(float(value), 6) if value is not None else None
+
+    def validate_longitude(self, value):
+        return round(float(value), 6) if value is not None else None
 
     def validate_films_signature_ids(self, value):
         if len(value) > 5:

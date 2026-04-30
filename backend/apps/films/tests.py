@@ -367,6 +367,20 @@ class TestRecommendationServiceWithFilms(TestCase):
         )
         self.film3.genres.add(self.genre_action)
 
+        # Séances futures requises par le filtre seances__showtime__gte=now()
+        self.cinema = Cinema.objects.create(
+            kinepolis_id="KRECO", name="Cinéma Test Reco",
+        )
+        future = timezone.now() + datetime.timedelta(days=1)
+        Seance.objects.create(
+            kinepolis_session_id="SREC001", film=self.film1,
+            cinema=self.cinema, showtime=future,
+        )
+        Seance.objects.create(
+            kinepolis_session_id="SREC002", film=self.film2,
+            cinema=self.cinema, showtime=future,
+        )
+
         self.user = _make_user_reco("reco2@test.com", "reco2")
         self.user.profile.genre_preferences = {"Action": 9, "Comédie": 5}
         self.user.profile.mood = "adrenaline"

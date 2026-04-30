@@ -35,6 +35,8 @@ export default function Films() {
   const [selectedGenre, setSelectedGenre] = useState<string>('')
 
   const [selectedRating, setSelectedRating] = useState<number | null>(null)
+  const [showEvents, setShowEvents] = useState(false)
+  const [selectedMaxAge, setSelectedMaxAge] = useState<string>('')
 
   const currentMood = user?.profile?.mood
   useEffect(() => {
@@ -58,6 +60,8 @@ export default function Films() {
         page,
         genre: selectedGenre || undefined,
         min_rating: selectedRating ?? undefined,
+        show_events: showEvents ? 'true' : 'false',
+        max_age: selectedMaxAge || undefined,
       })
       const data: PaginatedResponse<Film> = res.data
       setFilms(data.results)
@@ -67,11 +71,11 @@ export default function Films() {
     } finally {
       setLoading(false)
     }
-  }, [search, isFuture, page, selectedGenre, selectedRating])
+  }, [search, isFuture, page, selectedGenre, selectedRating, showEvents, selectedMaxAge])
 
   useEffect(() => {
     setPage(1)
-  }, [search, isFuture, selectedGenre, selectedRating])
+  }, [search, isFuture, selectedGenre, selectedRating, showEvents, selectedMaxAge])
 
   useEffect(() => {
     fetchFilms()
@@ -90,9 +94,16 @@ export default function Films() {
   const clearFilters = () => {
     setSelectedGenre('')
     setSelectedRating(null)
+    setShowEvents(false)
+    setSelectedMaxAge('')
   }
 
-  const activeFilterCount = [selectedGenre, selectedRating !== null].filter(Boolean).length
+  const activeFilterCount = [
+    selectedGenre,
+    selectedRating !== null,
+    showEvents,
+    selectedMaxAge !== '',
+  ].filter(Boolean).length
   const totalPages = Math.ceil(totalCount / 20)
 
   return (
@@ -241,6 +252,45 @@ export default function Films() {
               ))}
             </div>
           </div>
+
+          {/* Classification âge */}
+          <div>
+            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">Classification âge</p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { label: 'Tous', value: '' },
+                { label: '+6', value: '6' },
+                { label: '+12', value: '12' },
+                { label: '+16', value: '16' },
+                { label: '+18', value: '18' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => setSelectedMaxAge(selectedMaxAge === opt.value ? '' : opt.value)}
+                  className={`px-4 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    selectedMaxAge === opt.value
+                      ? 'bg-[var(--accent-red)] text-white'
+                      : 'glass text-[var(--text-muted)] hover:text-white'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Toggle événements spéciaux */}
+          <label className="flex items-center gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showEvents}
+              onChange={e => setShowEvents(e.target.checked)}
+              className="w-4 h-4 accent-[var(--accent-red)]"
+            />
+            <span className="text-sm text-[var(--text-muted)]">
+              Afficher opéras, concerts et événements spéciaux
+            </span>
+          </label>
 
           {activeFilterCount > 0 && (
             <button onClick={clearFilters}

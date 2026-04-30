@@ -25,10 +25,19 @@ class RegisterView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
 
+        # US-065 : email de vérification (non bloquant)
+        try:
+            from apps.users.email_service import EmailService
+            EmailService.send_verification_email(user)
+            email_sent = True
+        except Exception:
+            email_sent = False
+
         refresh = RefreshToken.for_user(user)
         return Response(
             {
                 "message": f"Bienvenue {user.first_name} ! Compte créé avec succès.",
+                "email_verification_sent": email_sent,
                 "user": UserSerializer(user).data,
                 "tokens": {
                     "refresh": str(refresh),
@@ -37,6 +46,37 @@ class RegisterView(generics.CreateAPIView):
             },
             status=status.HTTP_201_CREATED,
         )
+
+
+class VerifyEmailView(APIView):
+    """GET /api/auth/verify-email/<token>/ — US-065."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, token):
+        from apps.users.email_service import EmailService
+        success, message = EmailService.verify_token(str(token))
+        if success:
+            return Response({"message": message})
+        return Response({"error": message}, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ResendVerificationView(APIView):
+    """POST /api/auth/resend-verification/ — US-065."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        if user.is_email_verified:
+            return Response({"message": "Email déjà vérifié."})
+        try:
+            from apps.users.email_service import EmailService
+            EmailService.send_verification_email(user)
+            return Response({"message": "Email de vérification renvoyé !"})
+        except Exception:
+            return Response(
+                {"error": "Erreur lors de l'envoi. Réessayez plus tard."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class LogoutView(APIView):

@@ -5,11 +5,28 @@ import subprocess
 import sys
 
 from django.core.cache import cache
+from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 logger = logging.getLogger(__name__)
 
 _SCRAPER_SCRIPT = os.path.join(os.path.dirname(__file__), "_kinepolis_scraper.py")
+
+SPECIAL_EVENT_KEYWORDS = [
+    'opera ', 'opéra ', 'concert:', 'concert :', 'nt live',
+    'exhibition', 'stand-up', 'stand-up', 'docu:', 'sport:',
+    'film & facts', 'seniors:', 'anime:', 'ap:', 'avant-première:',
+    'double bill', 'marathon', 'collector', 'de mol', 'filmquiz',
+    'opera live', 'opera reprise', 'opéra reprise', 'laura laune',
+    'paul mirabel', 'artus', 'julien doré', 'johnny hallyday',
+    'santa -', 'bring me', 'alain souchon', 'bluey', 'peppa',
+    'operalive', 'casting', 'spectacle',
+]
+
+
+def _is_special_event(title: str) -> bool:
+    title_lower = title.lower()
+    return any(kw in title_lower for kw in SPECIAL_EVENT_KEYWORDS)
 
 CDN_BASE = "https://cdn.kinepolis.be"
 BOOKING_BASE = "https://kinepolis.be/fr/direct-vista-redirect"
@@ -100,7 +117,7 @@ class KinepolisService:
         films_count = sum(self._sync_film(fd, cdn_base) for fd in all_films.values())
 
         # Retirer les films qui ne sont plus dans le feed Kinepolis
-        from apps.films.models import Film
+        from apps.films.models import Film, Seance
         retired = Film.objects.exclude(
             kinepolis_id__startswith='tmdb_'
         ).exclude(
@@ -115,6 +132,41 @@ class KinepolisService:
             all_sessions.extend(data.get(section, {}).get("sessions", []))
 
         sessions_count = sum(self._sync_session(sd) for sd in all_sessions)
+
+        # Recalculer is_future d'après release_date et séances réelles
+        from django.db.models import Min
+        today = timezone.localdate()
+
+        film_earliest = {
+            item['film_id']: item['earliest'].date()
+            for item in Seance.objects.values('film_id').annotate(earliest=Min('showtime'))
+        }
+
+        # Règle 1 : séance aujourd'hui ou avant → à l'affiche (avant-premières incluses)
+        showing_now = [fid for fid, d in film_earliest.items() if d <= today]
+        if showing_now:
+            updated = Film.objects.filter(id__in=showing_now).update(is_future=False)
+            logger.info(f"[Kinepolis] {updated} films passes a l'affiche (seance aujourd'hui/avant)")
+
+        # Règle 2 : release_date passée → à l'affiche (film déjà sorti, même re-projeté plus tard)
+        already_released = Film.objects.filter(
+            is_future=True,
+            release_date__isnull=False,
+            release_date__date__lte=today,
+        ).exclude(id__in=showing_now)
+        count_released = already_released.update(is_future=False)
+        if count_released:
+            logger.info(f"[Kinepolis] {count_released} films passes a l'affiche (release_date passee)")
+
+        # Règle 3 : release_date future ET pas de séance aujourd'hui → bientôt
+        future_only = Film.objects.filter(
+            is_future=False,
+            release_date__isnull=False,
+            release_date__date__gt=today,
+        ).exclude(id__in=showing_now)
+        count_future = future_only.update(is_future=True)
+        if count_future:
+            logger.info(f"[Kinepolis] {count_future} films passes en bientot (release_date future)")
 
         logger.info(f"[Kinepolis] {films_count} films, {sessions_count} seances synchronises")
         return films_count, sessions_count
@@ -149,12 +201,21 @@ class KinepolisService:
         final_poster = poster_url if not (existing and existing.poster_url) else existing.poster_url
         final_backdrop = backdrop_url if not (existing and existing.backdrop_url) else existing.backdrop_url
 
+        title = film_data.get("title") or film_data.get("name", "")
+        min_age = film_data.get("censor", {}).get("minimumAge") if film_data.get("censor") else None
+
+        # Film sorti il y a plus de 2 ans = rétro-projection, traité comme événement spécial
+        is_retro = False
+        if release_date:
+            age_days = (timezone.now() - release_date).days
+            is_retro = age_days > 730
+
         film, _ = Film.objects.update_or_create(
             kinepolis_id=film_id,
             defaults={
                 "corporate_id": film_data.get("corporateId"),
                 "imdb_code": film_data.get("imdbCode", ""),
-                "title": film_data.get("title") or film_data.get("name", ""),
+                "title": title,
                 "synopsis": film_data.get("synopsis", ""),
                 "short_synopsis": film_data.get("shortSynopsis", ""),
                 "duration": film_data.get("duration"),
@@ -164,6 +225,8 @@ class KinepolisService:
                 "is_future": film_data.get("showAsFutureRelease", False),
                 "poster_url": final_poster,
                 "backdrop_url": final_backdrop,
+                "is_special_event": _is_special_event(title) or is_retro,
+                "min_age": min_age,
             },
         )
 

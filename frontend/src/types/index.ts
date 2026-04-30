@@ -29,6 +29,7 @@ export interface User {
   last_name: string
   city: string
   date_of_birth?: string
+  is_email_verified: boolean
   profile: UserProfile
 }
 
@@ -40,6 +41,10 @@ export interface UserProfile {
   films_signature: Film[]
   badges: string[]
   stats: Record<string, number>
+  language_preference: 'vf' | 'vo' | 'both'
+  latitude: number | null
+  longitude: number | null
+  search_radius_km: number
 }
 
 // ---- Films ----
@@ -64,6 +69,8 @@ export interface Film {
   trailer_youtube_key: string
   tmdb_rating: number | null
   imdb_code: string
+  is_special_event: boolean
+  min_age: number | null
   genres: Genre[]
   seances?: Seance[]
 }
@@ -112,6 +119,7 @@ export interface Candidate {
   score: number
   reasons: string[]
   superliked_me: boolean
+  distance_km: number | null
 }
 
 export interface Match {
@@ -273,6 +281,35 @@ export interface Conversation {
   unread_count: number
   match_score: number
   updated_at: string
+}
+
+// ---- Journal (US-063) ----
+export interface WatchedFilm {
+  id: number
+  film_id?: number
+  film_info?: Film
+  watched_date: string | null
+  rating: number | null
+  review: string
+  is_public: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface PublicReview {
+  id: number
+  author_name: string
+  author_picture: string | null
+  rating: number
+  review: string
+  watched_date: string | null
+  created_at: string
+}
+
+export interface JournalStats {
+  total_watched: number
+  average_rating: number | null
+  top_genre: string | null
 }
 
 // ---- API ----

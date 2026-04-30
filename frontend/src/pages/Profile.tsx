@@ -1,10 +1,16 @@
 import { useState, useEffect, useRef } from 'react'
-import { Camera, Save, Eye, User, MapPin, Search, X, Award } from 'lucide-react'
+import { Camera, Save, Eye, User, MapPin, Search, X, Award, Navigation } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
-import { usersApi, filmsApi, badgesApi } from '../services/api'
+import { usersApi, filmsApi, badgesApi, authApi } from '../services/api'
 import type { Film, Badge, ReputationScore } from '../types'
 import { mediaUrl } from '../utils/media'
 import { BadgesGrid } from '../components/BadgeDisplay'
+
+const LANG_OPTIONS = [
+  { value: 'vf', label: 'VF', desc: 'Version Française' },
+  { value: 'vo', label: 'VO', desc: 'Version Originale' },
+  { value: 'both', label: 'Les deux', desc: 'Peu importe' },
+]
 
 const MOOD_OPTIONS = [
   { value: 'rire', label: 'Envie de rire' },
@@ -42,6 +48,13 @@ export default function Profile() {
   const [filmResults, setFilmResults] = useState<Film[]>([])
   const [searchingFilms, setSearchingFilms] = useState(false)
 
+  // US-062 : Langue + géolocalisation
+  const [langPref, setLangPref] = useState<string>('both')
+  const [latitude, setLatitude] = useState<number | null>(null)
+  const [longitude, setLongitude] = useState<number | null>(null)
+  const [searchRadius, setSearchRadius] = useState<number>(15)
+  const [geoLoading, setGeoLoading] = useState(false)
+
   // Badges & réputation
   const [badges, setBadges] = useState<Badge[]>([])
   const [reputation, setReputation] = useState<ReputationScore | null>(null)
@@ -56,6 +69,10 @@ export default function Profile() {
       setMood(user.profile?.mood || '')
       setGenrePrefs(user.profile?.genre_preferences || {})
       setFilmsSignature(user.profile?.films_signature || [])
+      setLangPref(user.profile?.language_preference || 'both')
+      setLatitude(user.profile?.latitude != null ? Number(user.profile.latitude) : null)
+      setLongitude(user.profile?.longitude != null ? Number(user.profile.longitude) : null)
+      setSearchRadius(user.profile?.search_radius_km ?? 15)
     }
   }, [user])
 
@@ -67,19 +84,24 @@ export default function Profile() {
     }
   }, [tab, user])
 
-  // Recherche TMDb debounced
+  // Recherche TMDb debounced — ref pour ignorer les résultats obsolètes
+  const latestFilmQuery = useRef('')
   useEffect(() => {
     if (!filmQuery.trim()) { setFilmResults([]); return }
+    latestFilmQuery.current = filmQuery
+    const controller = new AbortController()
     const t = setTimeout(async () => {
       setSearchingFilms(true)
       try {
-        const res = await filmsApi.tmdbSearch(filmQuery)
-        setFilmResults(res.data)
+        const res = await filmsApi.tmdbSearch(filmQuery, controller.signal)
+        if (latestFilmQuery.current === filmQuery) setFilmResults(res.data)
+      } catch {
+        // requête annulée ou erreur réseau
       } finally {
-        setSearchingFilms(false)
+        if (latestFilmQuery.current === filmQuery) setSearchingFilms(false)
       }
-    }, 400)
-    return () => clearTimeout(t)
+    }, 600)
+    return () => { clearTimeout(t); controller.abort() }
   }, [filmQuery])
 
   const showSuccess = (msg: string) => {
@@ -106,11 +128,43 @@ export default function Profile() {
       await usersApi.updateProfile({
         bio, mood, genre_preferences: genrePrefs,
         films_signature_ids: filmsSignature.map(f => f.id),
+        language_preference: langPref,
+        latitude,
+        longitude,
+        search_radius_km: searchRadius,
       })
       await fetchMe()
       showSuccess('Profil mis à jour !')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      alert('Géolocalisation non supportée par votre navigateur.')
+      return
+    }
+    setGeoLoading(true)
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setLatitude(pos.coords.latitude)
+        setLongitude(pos.coords.longitude)
+        setGeoLoading(false)
+      },
+      () => {
+        alert("Impossible d'obtenir votre position.")
+        setGeoLoading(false)
+      }
+    )
+  }
+
+  const handleResendVerification = async () => {
+    try {
+      await authApi.resendVerification()
+      showSuccess('Email de vérification renvoyé !')
+    } catch {
+      // silencieux
     }
   }
 
@@ -173,6 +227,19 @@ export default function Profile() {
           {user.city && <p className="text-[var(--text-muted)] text-sm flex items-center gap-1"><MapPin size={12} />{user.city}</p>}
         </div>
       </div>
+
+      {/* Email non vérifié */}
+      {!user.is_email_verified && (
+        <div className="mb-4 px-4 py-3 rounded-lg flex items-center justify-between gap-3 text-sm"
+          style={{ background: 'rgba(255,193,7,0.1)', border: '1px solid rgba(255,193,7,0.25)' }}>
+          <span style={{ color: '#fbbf24' }}>Email non vérifié — certaines fonctionnalités sont limitées.</span>
+          <button onClick={handleResendVerification}
+            className="shrink-0 text-xs px-3 py-1 rounded-md font-medium transition-colors"
+            style={{ background: 'rgba(255,193,7,0.2)', color: '#fbbf24' }}>
+            Renvoyer l'email
+          </button>
+        </div>
+      )}
 
       {/* Success message */}
       {success && (
@@ -277,6 +344,60 @@ export default function Profile() {
                   {m.label}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Langue préférée */}
+          <div className="glass rounded-2xl p-6">
+            <label className="block text-sm font-medium text-white mb-3">Langue préférée</label>
+            <div className="grid grid-cols-3 gap-2">
+              {LANG_OPTIONS.map(opt => (
+                <button key={opt.value} type="button" onClick={() => setLangPref(opt.value)}
+                  className={`px-3 py-3 rounded-xl text-center transition-all ${
+                    langPref === opt.value ? 'text-white' : 'text-[var(--text-muted)] hover:text-white'
+                  }`}
+                  style={{
+                    background: langPref === opt.value ? 'rgba(230,57,70,0.15)' : 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${langPref === opt.value ? 'rgba(230,57,70,0.4)' : 'rgba(255,255,255,0.05)'}`,
+                  }}>
+                  <div className="font-semibold text-sm">{opt.label}</div>
+                  <div className="text-xs mt-0.5 text-[var(--text-muted)]">{opt.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Géolocalisation */}
+          <div className="glass rounded-2xl p-6 space-y-4">
+            <label className="block text-sm font-medium text-white">Ma position</label>
+            <div className="flex items-center gap-3">
+              {latitude && longitude ? (
+                <span className="text-sm" style={{ color: '#4ade80' }}>
+                  Position enregistrée ({latitude.toFixed(4)}, {longitude.toFixed(4)})
+                </span>
+              ) : (
+                <span className="text-sm text-[var(--text-muted)]">Position non renseignée</span>
+              )}
+              <button type="button" onClick={handleGetLocation} disabled={geoLoading}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors btn-secondary disabled:opacity-60">
+                {geoLoading
+                  ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  : <Navigation size={14} />
+                }
+                Utiliser ma position
+              </button>
+            </div>
+            <div>
+              <div className="flex justify-between text-xs text-[var(--text-muted)] mb-2">
+                <span>Rayon de recherche</span>
+                <span className="font-medium text-white">{searchRadius} km</span>
+              </div>
+              <input type="range" min={5} max={300} step={5} value={searchRadius}
+                onChange={e => setSearchRadius(Number(e.target.value))}
+                className="w-full accent-[var(--accent-red)]" />
+              <div className="flex justify-between text-xs text-[var(--text-muted)] mt-1">
+                <span>5 km</span><span>75 km</span><span>150 km</span><span>300 km</span>
+              </div>
             </div>
           </div>
 
