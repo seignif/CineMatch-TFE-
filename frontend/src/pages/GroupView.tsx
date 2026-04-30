@@ -28,6 +28,7 @@ export default function GroupView() {
   const [matches, setMatches] = useState<Match[]>([])
   const [selectedInviteIds, setSelectedInviteIds] = useState<number[]>([])
   const [inviting, setInviting] = useState(false)
+  const [removingId, setRemovingId] = useState<number | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const { messages, connected, sendMessage } = useGroupChat(group ? groupId : null)
@@ -89,6 +90,16 @@ export default function GroupView() {
       setEditingName(false)
     } catch {}
     finally { setSavingName(false) }
+  }
+
+  const handleRemoveMember = async (userId: number, firstName: string) => {
+    if (!confirm(`Retirer ${firstName} du groupe ?`)) return
+    setRemovingId(userId)
+    try {
+      await groupsApi.removeMember(groupId, userId)
+      await fetchGroup()
+    } catch {}
+    finally { setRemovingId(null) }
   }
 
   const handleLeave = async () => {
@@ -287,6 +298,16 @@ export default function GroupView() {
                 }`}>
                   {member.status === 'accepted' ? 'Accepté' : member.status === 'pending' ? 'En attente' : 'Refusé'}
                 </span>
+                {group.is_creator && member.user_info.id !== user?.id && (
+                  <button
+                    onClick={() => handleRemoveMember(member.user_info.id, member.user_info.first_name)}
+                    disabled={removingId === member.user_info.id}
+                    className="p-1 rounded-lg text-[var(--text-muted)] hover:text-red-400 hover:bg-red-400/10 transition-colors disabled:opacity-40"
+                    title="Retirer du groupe"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
               </div>
             </div>
           ))}

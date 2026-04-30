@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Clock, Star, Play, Calendar, X, Eye } from 'lucide-react'
-import { filmsApi, watchedApi } from '../services/api'
+import { filmsApi, watchedApi, socialApi } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import SeanceCard from '../components/SeanceCard'
-import type { Film, Seance, PublicReview, WatchedFilm } from '../types'
+import { PostCard } from '../components/PostCard'
+import { CreatePostModal } from '../components/CreatePostModal'
+import type { Film, Seance, PublicReview, WatchedFilm, Post } from '../types'
 
 function formatDuration(minutes: number | null) {
   if (!minutes) return null
@@ -65,6 +67,10 @@ export default function FilmDetail() {
   // Forum (US-064)
   const [communityReviews, setCommunityReviews] = useState<PublicReview[]>([])
 
+  // L'Entracte (US-071)
+  const [showCreatePost, setShowCreatePost] = useState(false)
+  const [filmPosts, setFilmPosts] = useState<Post[]>([])
+
   useEffect(() => {
     if (!id) return
     const filmId = parseInt(id)
@@ -81,6 +87,12 @@ export default function FilmDetail() {
       setCommunityReviews(reviewsRes.data.results ?? reviewsRes.data)
     }).catch(() => navigate('/films'))
       .finally(() => setLoading(false))
+
+    // Posts L'Entracte sur ce film
+    socialApi.getPosts({ film_id: filmId }).then(res => {
+      const data = res.data
+      setFilmPosts((data.results ?? data).slice(0, 3))
+    }).catch(() => {})
 
     // Mon entrée journal
     watchedApi.getAll().then(res => {
@@ -249,6 +261,14 @@ export default function FilmDetail() {
                     {myEntry ? 'Modifier mon avis' : "J'ai vu ce film"}
                   </button>
                 )}
+                {user && (
+                  <button
+                    onClick={() => setShowCreatePost(true)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-white/10 hover:bg-white/15 text-white"
+                  >
+                    Partager dans L'Entracte
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -386,6 +406,42 @@ export default function FilmDetail() {
           </div>
         )}
       </div>
+
+      {/* L'Entracte — posts sur ce film (US-071) */}
+      {filmPosts.length > 0 && (
+        <div className="mt-6">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-white font-semibold">Dans L'Entracte</h3>
+            <button
+              onClick={() => navigate(`/entracte?film_id=${film.id}`)}
+              className="text-[var(--accent-red)] text-sm hover:underline"
+            >
+              Voir tous
+            </button>
+          </div>
+          <div className="space-y-3">
+            {filmPosts.map(post => (
+              <PostCard
+                key={post.id}
+                post={post}
+                onDelete={id => setFilmPosts(prev => prev.filter(p => p.id !== id))}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* CreatePostModal (US-071) */}
+      {showCreatePost && (
+        <CreatePostModal
+          initialFilm={film}
+          onClose={() => setShowCreatePost(false)}
+          onCreated={post => {
+            setFilmPosts(prev => [post, ...prev].slice(0, 3))
+            setShowCreatePost(false)
+          }}
+        />
+      )}
 
       {/* Modal "J'ai vu ce film" (US-063) */}
       {showWatchedModal && (

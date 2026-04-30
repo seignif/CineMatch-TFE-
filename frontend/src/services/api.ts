@@ -165,6 +165,8 @@ export const groupsApi = {
     api.post(`/matching/groups/${id}/choose-film/`, { film_id }),
   invite: (id: number, member_ids: number[]) =>
     api.post(`/matching/groups/${id}/invite/`, { member_ids }),
+  removeMember: (groupId: number, userId: number) =>
+    api.delete(`/matching/groups/${groupId}/members/${userId}/`),
 }
 
 export const chatApi = {
@@ -174,6 +176,24 @@ export const chatApi = {
   getMessages: (conv_id: number) =>
     api.get(`/chat/conversations/${conv_id}/messages/`),
   getUnreadCount: () => api.get('/chat/unread/'),
+}
+
+export const socialApi = {
+  getPosts: (params?: { film_id?: number; matches_only?: boolean }) =>
+    api.get('/social/posts/', { params }),
+  getPost: (id: number) => api.get(`/social/posts/${id}/`),
+  createPost: (data: { content: string; film_id?: number }) =>
+    api.post('/social/posts/', data),
+  deletePost: (id: number) => api.delete(`/social/posts/${id}/`),
+  toggleLike: (postId: number) => api.post(`/social/posts/${postId}/like/`),
+  getComments: (postId: number) => api.get(`/social/posts/${postId}/comments/`),
+  addComment: (postId: number, content: string) =>
+    api.post(`/social/posts/${postId}/comments/`, { content }),
+  deleteComment: (commentId: number) => api.delete(`/social/comments/${commentId}/`),
+  getNotifications: () => api.get('/social/notifications/'),
+  getUnreadCount: () => api.get('/social/notifications/unread-count/'),
+  markAllRead: () => api.post('/social/notifications/read/'),
+  markOneRead: (id: number) => api.post(`/social/notifications/${id}/read/`),
 }
 
 export default api
