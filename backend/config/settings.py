@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     'apps.films',
     'apps.matching',
     'apps.chat',
+    'apps.social',
 ]
 
 MIDDLEWARE = [

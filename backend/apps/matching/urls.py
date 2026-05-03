@@ -5,8 +5,8 @@ from .views import (
     OutingCancelView, OutingMarkBookedView, UpcomingOutingsView,
     OutingCompleteView, ReviewCreateView,
     GroupListCreateView, GroupInvitationsView, GroupRespondInvitationView,
-    GroupDetailView, GroupLeaveView, GroupInviteMembersView, GroupMessagesView,
-    FilmVoteView, GroupChooseFilmView,
+    GroupDetailView, GroupLeaveView, GroupInviteMembersView, GroupRemoveMemberView,
+    GroupMessagesView, FilmVoteView, GroupChooseFilmView,
 )
 
 urlpatterns = [
@@ -35,6 +35,7 @@ urlpatterns = [
     path('groups/<int:pk>/respond/', GroupRespondInvitationView.as_view(), name='group-respond'),
     path('groups/<int:pk>/leave/', GroupLeaveView.as_view(), name='group-leave'),
     path('groups/<int:pk>/invite/', GroupInviteMembersView.as_view(), name='group-invite'),
+    path('groups/<int:pk>/members/<int:user_pk>/', GroupRemoveMemberView.as_view(), name='group-remove-member'),
     path('groups/<int:pk>/messages/', GroupMessagesView.as_view(), name='group-messages'),
     path('groups/<int:pk>/vote/', FilmVoteView.as_view(), name='group-vote'),
     path('groups/<int:pk>/choose-film/', GroupChooseFilmView.as_view(), name='group-choose-film'),

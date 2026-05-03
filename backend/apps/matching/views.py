@@ -1,5 +1,6 @@
 import logging
 from django.db.models import Q
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
@@ -142,6 +143,24 @@ class SwipeView(APIView):
                     match_obj.ai_generated_reasons = ai_reasons
                     match_obj.ai_match_message = ai_message
                     match_obj.save()
+
+                    # Notification nouveau match pour les deux utilisateurs
+                    try:
+                        from apps.social.models import Notification
+                        Notification.objects.create(
+                            user=to_user,
+                            type='new_match',
+                            triggered_by=from_user,
+                            message=f"Vous avez un nouveau match avec {from_user.first_name} !",
+                        )
+                        Notification.objects.create(
+                            user=from_user,
+                            type='new_match',
+                            triggered_by=to_user,
+                            message=f"Vous avez un nouveau match avec {to_user.first_name} !",
+                        )
+                    except Exception:
+                        pass
 
         response_data = {'action': action, 'match': None}
         if is_new_match and match_obj:
@@ -477,6 +496,16 @@ class GroupListCreateView(generics.ListCreateAPIView):
                     group=group, user=invitee, role='member',
                     status='pending', invited_by=user,
                 )
+                try:
+                    from apps.social.models import Notification
+                    Notification.objects.create(
+                        user=invitee,
+                        type='group_invitation',
+                        triggered_by=user,
+                        message=f"{user.first_name} vous invite dans le groupe \"{group.name}\"",
+                    )
+                except Exception:
+                    pass
             except User.DoesNotExist:
                 pass
 
@@ -574,6 +603,50 @@ class GroupLeaveView(APIView):
             group.save()
 
         return Response({'message': 'Vous avez quitté le groupe.'})
+
+
+class GroupRemoveMemberView(APIView):
+    """DELETE /api/matching/groups/<pk>/members/<user_pk>/ — l'admin retire un membre."""
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk, user_pk):
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+
+        group = get_object_or_404(Group, pk=pk)
+        if group.creator != request.user:
+            return Response({'error': 'Seul l\'admin peut retirer des membres.'}, status=status.HTTP_403_FORBIDDEN)
+        if user_pk == request.user.id:
+            return Response({'error': 'Vous ne pouvez pas vous retirer vous-même.'}, status=status.HTTP_400_BAD_REQUEST)
+        membership = get_object_or_404(GroupMember, group=group, user_id=user_pk)
+        first_name = membership.user.first_name
+        msg = GroupMessage.objects.create(
+            group=group, sender=request.user,
+            content=f"{first_name} a été retiré du groupe.",
+            is_system=True,
+        )
+        membership.delete()
+
+        try:
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f'group_{group.id}',
+                {
+                    'type': 'group_message',
+                    'message': {
+                        'id': msg.id,
+                        'sender_id': None,
+                        'sender_name': '',
+                        'content': msg.content,
+                        'is_system': True,
+                        'created_at': msg.created_at.isoformat(),
+                    },
+                },
+            )
+        except Exception:
+            pass
+
+        return Response({'message': f'{first_name} a été retiré du groupe.'})
 
 
 class GroupInviteMembersView(APIView):

@@ -7,4 +7,5 @@ urlpatterns = [
     path('films/', include('apps.films.urls')),
     path('matching/', include('apps.matching.urls')),
     path('chat/', include('apps.chat.urls')),
+    path('social/', include('apps.social.urls')),
 ]

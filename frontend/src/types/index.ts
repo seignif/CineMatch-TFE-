@@ -312,6 +312,47 @@ export interface JournalStats {
   top_genre: string | null
 }
 
+// ---- L'Entracte — Réseau social (US-067 à US-072) ----
+export interface PostComment {
+  id: number
+  author_id: number
+  author_name: string
+  author_picture: string | null
+  content: string
+  created_at: string
+}
+
+export interface Post {
+  id: number
+  author_id: number
+  author_name: string
+  author_picture: string | null
+  content: string
+  film_info: {
+    id: number
+    title: string
+    poster_url: string
+    kinepolis_id: string
+  } | null
+  like_count: number
+  comment_count: number
+  is_liked: boolean
+  is_author: boolean
+  preview_comments: PostComment[]
+  created_at: string
+}
+
+export interface SocialNotification {
+  id: number
+  type: 'like_post' | 'comment_post' | 'new_match' | 'group_invitation' | 'outing_confirmed'
+  message: string
+  triggered_by_name: string | null
+  triggered_by_picture: string | null
+  post_preview: { id: number; content: string } | null
+  is_read: boolean
+  created_at: string
+}
+
 // ---- API ----
 export interface PaginatedResponse<T> {
   count: number

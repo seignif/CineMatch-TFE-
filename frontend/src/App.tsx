@@ -16,6 +16,8 @@ import Groups from './pages/Groups'
 import GroupView from './pages/GroupView'
 import Journal from './pages/Journal'
 import VerifyEmail from './pages/VerifyEmail'
+import Entracte from './pages/Entracte'
+import Notifications from './pages/Notifications'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
@@ -48,6 +50,8 @@ function App() {
           <Route path="/chat" element={<PrivateRoute><Chat /></PrivateRoute>} />
           <Route path="/chat/:id" element={<PrivateRoute><ConversationView /></PrivateRoute>} />
           <Route path="/journal" element={<PrivateRoute><Journal /></PrivateRoute>} />
+          <Route path="/entracte" element={<PrivateRoute><Entracte /></PrivateRoute>} />
+          <Route path="/notifications" element={<PrivateRoute><Notifications /></PrivateRoute>} />
         </Route>
       </Routes>
     </BrowserRouter>
