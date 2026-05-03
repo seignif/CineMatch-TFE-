@@ -220,7 +220,7 @@ export default function ProposeOutingModal({ matchId, partnerName, onClose, onSu
                           {formatShowtime(s.showtime)}
                         </div>
                         <div className="text-xs text-[var(--text-muted)]">
-                          {s.language}
+                          {s.cinema.name} · {s.language}
                           {s.hall ? ` · Salle ${s.hall}` : ''}
                         </div>
                         {s.is_sold_out && <span className="text-xs text-red-400">Complet</span>}
