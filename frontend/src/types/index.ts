@@ -48,6 +48,21 @@ export interface UserProfile {
 }
 
 // ---- Films ----
+export interface CastMember {
+  name: string
+  character: string
+  profile_path: string
+  profile_url: string
+  order: number
+}
+
+export interface CrewMember {
+  name: string
+  job: string
+  profile_path: string
+  profile_url: string
+}
+
 export interface Genre {
   id: number
   name: string
@@ -71,6 +86,8 @@ export interface Film {
   imdb_code: string
   is_special_event: boolean
   min_age: number | null
+  cast: CastMember[]
+  crew: CrewMember[]
   genres: Genre[]
   seances?: Seance[]
 }
