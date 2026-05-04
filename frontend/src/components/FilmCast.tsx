@@ -5,7 +5,7 @@ interface Props {
   crew: CrewMember[]
 }
 
-const PLACEHOLDER = '/default-avatar.png'
+const PLACEHOLDER = '/default-avatar.svg'
 
 export function FilmCast({ cast, crew }: Props) {
   if (!cast?.length && !crew?.length) return null

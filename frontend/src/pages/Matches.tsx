@@ -89,6 +89,7 @@ export default function Matches() {
                   style={{ borderColor: 'var(--accent-red)' }}>
                   {other.profile?.profile_picture ? (
                     <img src={mediaUrl(other.profile.profile_picture)!} alt={other.first_name}
+                      onError={e => { e.currentTarget.src = '/default-avatar.svg' }}
                       className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-2xl font-bold"

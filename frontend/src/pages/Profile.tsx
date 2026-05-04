@@ -36,6 +36,7 @@ export default function Profile() {
   // Form state
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
+  const [username, setUsername] = useState('')
   const [city, setCity] = useState('')
   const [dateOfBirth, setDateOfBirth] = useState('')
   const [bio, setBio] = useState('')
@@ -63,6 +64,7 @@ export default function Profile() {
     if (user) {
       setFirstName(user.first_name)
       setLastName(user.last_name)
+      setUsername(user.username || '')
       setCity(user.city || '')
       setDateOfBirth(user.date_of_birth || '')
       setBio(user.profile?.bio || '')
@@ -113,7 +115,7 @@ export default function Profile() {
     e.preventDefault()
     setLoading(true)
     try {
-      await usersApi.updateMe({ first_name: firstName, last_name: lastName, city, date_of_birth: dateOfBirth || null })
+      await usersApi.updateMe({ first_name: firstName, last_name: lastName, username, city, date_of_birth: dateOfBirth || null })
       await fetchMe()
       showSuccess('Informations mises à jour !')
     } finally {
@@ -223,6 +225,7 @@ export default function Profile() {
 
         <div>
           <h1 className="text-2xl font-semibold text-white">{user.first_name} {user.last_name}</h1>
+          <p className="text-[var(--text-muted)] text-sm">@{user.username}</p>
           <p className="text-[var(--text-muted)] text-sm">{user.email}</p>
           {user.city && <p className="text-[var(--text-muted)] text-sm flex items-center gap-1"><MapPin size={12} />{user.city}</p>}
         </div>
@@ -282,6 +285,11 @@ export default function Profile() {
               <input value={lastName} onChange={e => setLastName(e.target.value)}
                 className="input-field" required />
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[var(--text-muted)] mb-1.5">Nom d'utilisateur</label>
+            <input value={username} onChange={e => setUsername(e.target.value)}
+              placeholder="@monpseudo" className="input-field" required minLength={3} maxLength={150} />
           </div>
           <div>
             <label className="block text-sm font-medium text-[var(--text-muted)] mb-1.5">Email</label>

@@ -53,6 +53,7 @@ function ProfileModal({ candidate, onClose }: { candidate: Candidate; onClose: (
             <img
               src={mediaUrl(candidate.profile.profile_picture)!}
               alt={candidate.first_name}
+              onError={e => { e.currentTarget.src = '/default-avatar.svg' }}
               className="w-full h-full object-cover"
             />
           ) : (
@@ -363,6 +364,7 @@ export default function Matching() {
                   <div className="h-72 relative">
                     {c.profile?.profile_picture ? (
                       <img src={mediaUrl(c.profile.profile_picture)!} alt={c.first_name}
+                        onError={e => { e.currentTarget.src = '/default-avatar.svg' }}
                         className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-7xl font-bold"

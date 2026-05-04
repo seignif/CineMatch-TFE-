@@ -71,7 +71,7 @@ export const PostCard: React.FC<Props> = ({ post, onDelete }) => {
   }
 
   const avatar = (url: string | null | undefined): string =>
-    mediaUrl(url) ?? '/default-avatar.png'
+    mediaUrl(url) ?? '/default-avatar.svg'
 
   return (
     <div className="bg-[var(--bg-card)] rounded-xl p-4 border border-white/5">
@@ -80,6 +80,7 @@ export const PostCard: React.FC<Props> = ({ post, onDelete }) => {
         <img
           src={avatar(post.author_picture)}
           alt={post.author_name}
+          onError={e => { e.currentTarget.src = '/default-avatar.svg' }}
           className="w-9 h-9 rounded-full object-cover bg-white/10"
         />
         <div className="flex-1 min-w-0">
@@ -148,6 +149,7 @@ export const PostCard: React.FC<Props> = ({ post, onDelete }) => {
               <img
                 src={avatar(comment.author_picture)}
                 alt={comment.author_name}
+                onError={e => { e.currentTarget.src = '/default-avatar.svg' }}
                 className="w-7 h-7 rounded-full object-cover bg-white/10 flex-shrink-0 mt-0.5"
               />
               <div className="bg-black/30 rounded-lg px-3 py-2 flex-1 min-w-0">
@@ -162,6 +164,7 @@ export const PostCard: React.FC<Props> = ({ post, onDelete }) => {
             <img
               src={avatar(user?.profile?.profile_picture ?? null)}
               alt="Moi"
+              onError={e => { e.currentTarget.src = '/default-avatar.svg' }}
               className="w-7 h-7 rounded-full object-cover bg-white/10 flex-shrink-0"
             />
             <input
