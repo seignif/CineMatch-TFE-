@@ -33,7 +33,7 @@ class FilmSerializer(serializers.ModelSerializer):
         model = Film
         fields = ['id', 'kinepolis_id', 'title', 'poster_url', 'duration',
                   'release_date', 'is_future', 'genres', 'tmdb_rating',
-                  'audio_language', 'is_special_event', 'min_age']
+                  'audio_language', 'is_special_event', 'min_age', 'cast', 'crew']
 
 
 class FilmDetailSerializer(serializers.ModelSerializer):
@@ -46,7 +46,7 @@ class FilmDetailSerializer(serializers.ModelSerializer):
                   'title', 'synopsis', 'short_synopsis', 'duration', 'release_date',
                   'language', 'audio_language', 'is_future', 'poster_url',
                   'backdrop_url', 'trailer_youtube_key', 'tmdb_rating',
-                  'is_special_event', 'min_age', 'genres', 'seances', 'last_sync']
+                  'is_special_event', 'min_age', 'cast', 'crew', 'genres', 'seances', 'last_sync']
 
 
 class WatchedFilmSerializer(serializers.ModelSerializer):

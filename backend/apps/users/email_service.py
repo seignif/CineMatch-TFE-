@@ -32,28 +32,89 @@ class EmailService:
         frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173')
         verification_url = f"{frontend_url}/verify-email/{token_obj.token}"
 
-        html_message = f"""
-        <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-          <div style="background:#0A0A0F;padding:30px;text-align:center;">
-            <h1 style="color:#E63946;font-size:28px;">CineMatch</h1>
-          </div>
-          <div style="padding:30px;background:#12121A;color:#F5F5F5;">
-            <h2>Bienvenue {user.first_name} !</h2>
-            <p>Confirmez votre adresse email pour accéder à toutes les fonctionnalités.</p>
-            <div style="text-align:center;margin:30px 0;">
-              <a href="{verification_url}"
-                 style="background:#E63946;color:white;padding:15px 30px;
-                        border-radius:8px;text-decoration:none;font-weight:bold;">
-                Confirmer mon email
-              </a>
-            </div>
-            <p style="color:#8892A4;font-size:12px;">
-              Ce lien est valable 24 heures.<br>
-              Si vous n'avez pas créé de compte, ignorez cet email.
+        html_message = f"""<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;background:#0A0A0F;font-family:'Helvetica Neue',Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0A0A0F;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
+
+        <!-- Header -->
+        <tr>
+          <td style="background:linear-gradient(135deg,#12121A 0%,#1A1A2E 100%);border-radius:16px 16px 0 0;padding:40px;text-align:center;border-bottom:2px solid #E63946;">
+            <p style="margin:0 0 8px 0;font-size:13px;letter-spacing:4px;color:#E63946;text-transform:uppercase;">Bienvenue sur</p>
+            <h1 style="margin:0;font-size:42px;font-weight:900;letter-spacing:6px;color:#FFFFFF;">
+              CINE<span style="color:#E63946;">MATCH</span>
+            </h1>
+            <p style="margin:12px 0 0 0;font-size:13px;color:#8892A4;letter-spacing:2px;">TROUVEZ VOS PARTENAIRES DE CINÉMA</p>
+          </td>
+        </tr>
+
+        <!-- Body -->
+        <tr>
+          <td style="background:#12121A;padding:48px 40px;">
+            <p style="margin:0 0 8px 0;font-size:13px;color:#E63946;letter-spacing:2px;text-transform:uppercase;">Vérification de compte</p>
+            <h2 style="margin:0 0 24px 0;font-size:26px;color:#FFFFFF;font-weight:700;">
+              Bonjour {user.first_name}&nbsp;!
+            </h2>
+            <p style="margin:0 0 16px 0;font-size:16px;color:#B0B8C8;line-height:1.7;">
+              Votre compte CineMatch a bien été créé. Il ne vous reste plus qu'une étape avant de rejoindre la communauté et de trouver vos partenaires de cinéma.
             </p>
-          </div>
-        </div>
-        """
+            <p style="margin:0 0 36px 0;font-size:16px;color:#B0B8C8;line-height:1.7;">
+              Cliquez sur le bouton ci-dessous pour confirmer votre adresse email et activer votre compte&nbsp;:
+            </p>
+
+            <!-- CTA Button -->
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td align="center" style="padding:0 0 36px 0;">
+                  <a href="{verification_url}"
+                     style="display:inline-block;background:#E63946;color:#FFFFFF;
+                            font-size:16px;font-weight:700;letter-spacing:1px;
+                            text-decoration:none;padding:18px 48px;
+                            border-radius:50px;text-transform:uppercase;">
+                    Confirmer mon email
+                  </a>
+                </td>
+              </tr>
+            </table>
+
+            <!-- Divider -->
+            <hr style="border:none;border-top:1px solid #1E1E2E;margin:0 0 28px 0;">
+
+            <!-- Fallback link -->
+            <p style="margin:0 0 8px 0;font-size:13px;color:#8892A4;">
+              Si le bouton ne fonctionne pas, copiez ce lien dans votre navigateur&nbsp;:
+            </p>
+            <p style="margin:0 0 28px 0;word-break:break-all;">
+              <a href="{verification_url}" style="color:#E63946;font-size:13px;text-decoration:none;">{verification_url}</a>
+            </p>
+
+            <p style="margin:0;font-size:13px;color:#8892A4;line-height:1.6;">
+              Ce lien est valable <strong style="color:#F5F5F5;">24 heures</strong>.<br>
+              Si vous n'avez pas créé de compte CineMatch, ignorez simplement cet email.
+            </p>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="background:#0D0D14;border-radius:0 0 16px 16px;padding:24px 40px;text-align:center;">
+            <p style="margin:0 0 4px 0;font-size:12px;color:#8892A4;">
+              &copy; 2026 CineMatch &mdash; La plateforme cinéma belge
+            </p>
+            <p style="margin:0;font-size:12px;color:#4A5568;">
+              Cet email a été envoyé depuis <a href="https://cinematch.be" style="color:#E63946;text-decoration:none;">cinematch.be</a>
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
 
         try:
             send_mail(

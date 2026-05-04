@@ -49,6 +49,8 @@ class Film(models.Model):
     tmdb_rating = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
     is_special_event = models.BooleanField(default=False)
     min_age = models.IntegerField(null=True, blank=True)
+    cast = models.JSONField(default=list, blank=True)
+    crew = models.JSONField(default=list, blank=True)
     genres = models.ManyToManyField(Genre, blank=True)
     last_sync = models.DateTimeField(auto_now=True)
 

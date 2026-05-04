@@ -91,6 +91,52 @@ class TMDbService:
             cache_key=cache_key,
         )
 
+    def get_movie_credits(self, tmdb_id: int) -> dict | None:
+        """Récupère acteurs + équipe technique depuis TMDb. Cache Redis 24h."""
+        cache_key = f'tmdb_credits_{tmdb_id}'
+        cached = cache.get(cache_key)
+        if cached:
+            return cached
+        data = self._get(f'/movie/{tmdb_id}/credits')
+        if data:
+            cache.set(cache_key, data, CACHE_TTL)
+        return data
+
+    def extract_cast(self, credits_data: dict, limit: int = 8) -> list:
+        """Extrait les N premiers acteurs, construit l'URL de photo."""
+        cast = []
+        for actor in credits_data.get('cast', [])[:limit]:
+            profile_path = actor.get('profile_path', '')
+            cast.append({
+                'name': actor.get('name', ''),
+                'character': actor.get('character', ''),
+                'profile_path': profile_path,
+                'profile_url': self._build_image_url(profile_path, 'w185') if profile_path else '',
+                'order': actor.get('order', 0),
+            })
+        return cast
+
+    def extract_crew(self, credits_data: dict) -> list:
+        """Extrait réalisateur et scénaristes (max 3, dédoublonnés)."""
+        IMPORTANT_JOBS = ['Director', 'Screenplay', 'Writer', 'Story']
+        crew = []
+        seen_names: set = set()
+        for member in credits_data.get('crew', []):
+            job = member.get('job', '')
+            name = member.get('name', '')
+            if job in IMPORTANT_JOBS and name not in seen_names:
+                profile_path = member.get('profile_path', '')
+                crew.append({
+                    'name': name,
+                    'job': job,
+                    'profile_path': profile_path,
+                    'profile_url': self._build_image_url(profile_path, 'w185') if profile_path else '',
+                })
+                seen_names.add(name)
+                if len(crew) >= 3:
+                    break
+        return crew
+
     # ------------------------------------------------------------------
     # Image URL helpers
     # ------------------------------------------------------------------
@@ -211,9 +257,19 @@ class TMDbService:
 
         for field, value in updates.items():
             setattr(film, field, value)
+
+        # 4. Acteurs & équipe technique
+        if not film.cast:
+            credits = self.get_movie_credits(tmdb_id)
+            if credits:
+                updates['cast'] = self.extract_cast(credits, limit=8)
+                updates['crew'] = self.extract_crew(credits)
+                film.cast = updates['cast']
+                film.crew = updates['crew']
+
         film.save(update_fields=list(updates.keys()))
 
-        # 4. Sync genres
+        # 6. Sync genres
         tmdb_genre_ids = [g['id'] for g in details.get('genres', [])]
         if tmdb_genre_ids:
             genres = Genre.objects.filter(tmdb_id__in=tmdb_genre_ids)
@@ -226,6 +282,29 @@ class TMDbService:
     # ------------------------------------------------------------------
     # Bulk enrichment
     # ------------------------------------------------------------------
+
+    def enrich_credits_only(self) -> dict:
+        """Enrichit uniquement les films avec tmdb_id mais sans cast."""
+        from apps.films.models import Film
+        qs = Film.objects.filter(tmdb_id__isnull=False, cast=[])
+        total = qs.count()
+        enriched = 0
+        failed = 0
+        logger.info(f"[TMDb] Credits-only: {total} films à enrichir")
+        for film in qs.iterator():
+            try:
+                credits = self.get_movie_credits(film.tmdb_id)
+                if credits:
+                    film.cast = self.extract_cast(credits, limit=8)
+                    film.crew = self.extract_crew(credits)
+                    film.save(update_fields=['cast', 'crew'])
+                    enriched += 1
+                else:
+                    failed += 1
+            except Exception as e:
+                logger.warning(f"[TMDb] Credits erreur '{film.title}': {e}")
+                failed += 1
+        return {'total': total, 'enriched': enriched, 'failed': failed}
 
     def enrich_all(self, force: bool = False) -> dict:
         """

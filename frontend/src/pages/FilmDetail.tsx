@@ -7,6 +7,7 @@ import SeanceCard from '../components/SeanceCard'
 import { PostCard } from '../components/PostCard'
 import { CreatePostModal } from '../components/CreatePostModal'
 import type { Film, Seance, PublicReview, WatchedFilm, Post } from '../types'
+import { FilmCast } from '../components/FilmCast'
 
 function formatDuration(minutes: number | null) {
   if (!minutes) return null
@@ -285,6 +286,11 @@ export default function FilmDetail() {
               {film.synopsis || film.short_synopsis}
             </p>
           </div>
+        )}
+
+        {/* Acteurs & équipe */}
+        {(film.cast?.length > 0 || film.crew?.length > 0) && (
+          <FilmCast cast={film.cast} crew={film.crew} />
         )}
 
         {/* Séances */}
