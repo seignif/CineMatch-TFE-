@@ -36,6 +36,9 @@ class FilmViewSet(viewsets.ReadOnlyModelViewSet):
         return FilmSerializer
 
     def get_queryset(self):
+        # La page détail et les séances n'ont pas besoin de déduplication
+        if self.action in ('retrieve', 'seances'):
+            return Film.objects.exclude(kinepolis_id__startswith='tmdb_').prefetch_related('genres')
         qs = super().get_queryset()
         params = self.request.query_params
 
