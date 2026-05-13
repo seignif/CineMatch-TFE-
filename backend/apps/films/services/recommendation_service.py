@@ -17,7 +17,9 @@ class RecommendationService:
         from apps.films.models import Film
 
         try:
-            profile = user.profile
+            profile = user.profile if user else None
+            if profile is None:
+                raise AttributeError
         except Exception:
             return list(Film.objects.exclude(
                 kinepolis_id__startswith='tmdb_'
@@ -58,6 +60,11 @@ class RecommendationService:
             db_models.Q(title__istartswith='back2back:') |
             db_models.Q(title__istartswith='double bill:') |
             db_models.Q(title__istartswith='discovery screening:') |
+            db_models.Q(title__istartswith='avant-premiere:') |
+            db_models.Q(title__istartswith='film & debat:') |
+            db_models.Q(title__istartswith='seniors:') |
+            db_models.Q(title__istartswith='special event:') |
+            db_models.Q(title__istartswith='collector ') |
             db_models.Q(title__iendswith=' night') |
             db_models.Q(title__iendswith='(ukrainian version)')
         )
@@ -76,14 +83,31 @@ class RecommendationService:
             f.corporate_id for f in signature_films if f.corporate_id is not None
         }
 
+        # Séances via variants (même logique que le catalogue) : le film canonique
+        # n'a souvent pas de séances directes, c'est son variant VF/VO qui en a.
+        now = timezone.now()
+        tmdb_ids_with_seances = set(
+            Film.objects.filter(seances__showtime__gte=now, tmdb_id__isnull=False)
+            .values_list('tmdb_id', flat=True).distinct()
+        )
+        titles_with_seances = set(
+            Film.objects.filter(seances__showtime__gte=now, tmdb_id__isnull=True)
+            .values_list('title', flat=True).distinct()
+        )
+        imdb_codes_with_seances = set(
+            Film.objects.filter(seances__showtime__gte=now, imdb_code__gt='')
+            .values_list('imdb_code', flat=True).distinct()
+        )
+
         films = (
             Film.objects
             .exclude(kinepolis_id__startswith='tmdb_')
             .exclude(_special_q)
+            .filter(poster_url__gt='', is_future=False)
             .filter(
-                poster_url__gt='',
-                is_future=False,
-                seances__showtime__gte=timezone.now(),
+                db_models.Q(tmdb_id__in=tmdb_ids_with_seances) |
+                db_models.Q(title__in=titles_with_seances) |
+                db_models.Q(imdb_code__in=imdb_codes_with_seances)
             )
             .exclude(id__in=signature_ids)
             .exclude(id__in=watched_film_ids)
@@ -108,7 +132,7 @@ class RecommendationService:
                 pref = genre_prefs.get(genre_name.lower(), 0)
                 if pref > 0:
                     score += pref * 5
-                    if pref >= 7 and len(reasons) < 2 and f"Vous adorez {genre_name}" not in reasons:
+                    if pref >= 4 and len(reasons) < 2 and f"Vous adorez {genre_name}" not in reasons:
                         reasons.append(f"Vous adorez {genre_name}")
 
             # 2. Similarité avec films signature
@@ -145,10 +169,9 @@ class RecommendationService:
                 elif age_diff <= 5:
                     score += 5    # proche
                 elif age_diff >= 6:
-                    score -= 30   # trop éloigné (ex: film adulte vs enfant)
+                    score -= 10   # trop éloigné — malus modéré (ne casse pas un bon score genre/mood)
 
-            if score > 0:
-                scored.append((film, score, reasons[:2]))
+            scored.append((film, score, reasons[:2]))
 
         scored.sort(key=lambda x: x[1], reverse=True)
 

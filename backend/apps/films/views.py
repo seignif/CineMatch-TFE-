@@ -65,10 +65,6 @@ class FilmViewSet(viewsets.ReadOnlyModelViewSet):
                 db_models.Q(title__iendswith='(ukrainian version)')
             )
 
-        is_future = params.get('is_future')
-        if is_future is not None:
-            qs = qs.filter(is_future=is_future.lower() in ('true', '1'))
-
         search = params.get('search')
         if search:
             qs = qs.filter(title__icontains=search)
@@ -180,9 +176,9 @@ class FilmViewSet(viewsets.ReadOnlyModelViewSet):
 
         if is_future_param is not None:
             if is_future_param.lower() in ('true', '1'):
-                return qs.order_by('release_date')
+                return qs.filter(is_future=True).order_by('release_date')
             else:
-                # À l'affiche : visible si le film ou un variant (tmdb_id, titre ou imdb_code) a une séance à venir
+                # À l'affiche : films sortis (is_future=False) avec séances à venir
                 now = timezone.now()
                 tmdb_ids_with_seances = (
                     Film.objects.filter(seances__showtime__gte=now, tmdb_id__isnull=False)
@@ -196,7 +192,7 @@ class FilmViewSet(viewsets.ReadOnlyModelViewSet):
                     Film.objects.filter(seances__showtime__gte=now, imdb_code__gt='')
                     .values_list('imdb_code', flat=True).distinct()
                 )
-                return qs.filter(
+                return qs.filter(is_future=False).filter(
                     db_models.Q(tmdb_id__in=tmdb_ids_with_seances) |
                     db_models.Q(title__in=titles_with_seances) |
                     db_models.Q(imdb_code__in=imdb_codes_with_seances)
