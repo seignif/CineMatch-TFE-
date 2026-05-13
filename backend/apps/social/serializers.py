@@ -3,7 +3,7 @@ from apps.social.models import Notification, Post, PostComment, PostLike
 
 
 class PostCommentSerializer(serializers.ModelSerializer):
-    author_name = serializers.CharField(source='author.first_name', read_only=True)
+    author_name = serializers.CharField(source='author.username', read_only=True)
     author_id = serializers.IntegerField(source='author.id', read_only=True)
     author_picture = serializers.SerializerMethodField()
 
@@ -21,7 +21,7 @@ class PostCommentSerializer(serializers.ModelSerializer):
 
 
 class PostSerializer(serializers.ModelSerializer):
-    author_name = serializers.CharField(source='author.first_name', read_only=True)
+    author_name = serializers.CharField(source='author.username', read_only=True)
     author_id = serializers.IntegerField(source='author.id', read_only=True)
     author_picture = serializers.SerializerMethodField()
     film_info = serializers.SerializerMethodField()
@@ -82,7 +82,7 @@ class PostSerializer(serializers.ModelSerializer):
 
 
 class NotificationSerializer(serializers.ModelSerializer):
-    triggered_by_name = serializers.CharField(source='triggered_by.first_name', read_only=True)
+    triggered_by_name = serializers.CharField(source='triggered_by.username', read_only=True)
     triggered_by_picture = serializers.SerializerMethodField()
     post_preview = serializers.SerializerMethodField()
 

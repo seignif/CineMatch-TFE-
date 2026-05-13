@@ -36,6 +36,9 @@ class FilmViewSet(viewsets.ReadOnlyModelViewSet):
         return FilmSerializer
 
     def get_queryset(self):
+        # La page détail et les séances n'ont pas besoin de déduplication
+        if self.action in ('retrieve', 'seances'):
+            return Film.objects.exclude(kinepolis_id__startswith='tmdb_').prefetch_related('genres')
         qs = super().get_queryset()
         params = self.request.query_params
 
@@ -43,10 +46,24 @@ class FilmViewSet(viewsets.ReadOnlyModelViewSet):
         show_events = params.get('show_events', 'false')
         if show_events != 'true':
             qs = qs.filter(is_special_event=False)
-
-        is_future = params.get('is_future')
-        if is_future is not None:
-            qs = qs.filter(is_future=is_future.lower() in ('true', '1'))
+            # Filtrer formats Kinepolis spéciaux non détectés à l'enrichissement
+            qs = qs.exclude(
+                db_models.Q(title__istartswith='cinema storck:') |
+                db_models.Q(title__istartswith='ladies:') |
+                db_models.Q(title__istartswith='proximus for you:') |
+                db_models.Q(title__istartswith='horror night:') |
+                db_models.Q(title__istartswith='filmclub') |
+                db_models.Q(title__istartswith='knit & watch:') |
+                db_models.Q(title__istartswith='cast visit:') |
+                db_models.Q(title__istartswith='visite d') |
+                db_models.Q(title__istartswith='classics:') |
+                db_models.Q(title__istartswith='event:') |
+                db_models.Q(title__istartswith='back2back:') |
+                db_models.Q(title__istartswith='double bill:') |
+                db_models.Q(title__istartswith='discovery screening:') |
+                db_models.Q(title__iendswith=' night') |
+                db_models.Q(title__iendswith='(ukrainian version)')
+            )
 
         search = params.get('search')
         if search:
@@ -73,16 +90,113 @@ class FilmViewSet(viewsets.ReadOnlyModelViewSet):
             except ValueError:
                 pass
 
+        # Filtre par langue de séance — audio détecté via raw_attributes ('english' = VO)
+        seance_lang = params.get('seance_lang')
+        if seance_lang == 'vf':
+            vf_ids = Seance.objects.exclude(raw_attributes__icontains='english').values_list('film_id', flat=True).distinct()
+            vf_tmdb = Film.objects.filter(id__in=vf_ids, tmdb_id__isnull=False).values_list('tmdb_id', flat=True)
+            vf_direct = Film.objects.filter(id__in=vf_ids, tmdb_id__isnull=True).values_list('id', flat=True)
+            qs = qs.filter(db_models.Q(tmdb_id__in=vf_tmdb) | db_models.Q(id__in=vf_direct))
+        elif seance_lang == 'vo':
+            vo_ids = Seance.objects.filter(raw_attributes__icontains='english').values_list('film_id', flat=True).distinct()
+            vo_tmdb = Film.objects.filter(id__in=vo_ids, tmdb_id__isnull=False).values_list('tmdb_id', flat=True)
+            vo_direct = Film.objects.filter(id__in=vo_ids, tmdb_id__isnull=True).values_list('id', flat=True)
+            qs = qs.filter(db_models.Q(tmdb_id__in=vo_tmdb) | db_models.Q(id__in=vo_direct))
+
+        # Dédupliquer : une entrée par tmdb_id, et par titre pour les films sans tmdb_id
+        from django.db.models import Min
+        tmdb_first_ids = (
+            Film.objects.filter(tmdb_id__isnull=False).exclude(kinepolis_id__startswith='tmdb_')
+            .values('tmdb_id').annotate(first_id=Min('id')).values_list('first_id', flat=True)
+        )
+        # Titres ET imdb_codes déjà couverts par un film enrichi TMDb → ne pas doubloter
+        titles_covered_by_tmdb = (
+            Film.objects.filter(tmdb_id__isnull=False).values_list('title', flat=True)
+        )
+        # Imdb_codes couverts UNIQUEMENT par de vrais films (pas des événements spéciaux enrichis)
+        _special_event_q = (
+            db_models.Q(is_special_event=True) |
+            db_models.Q(title__istartswith='cinema storck:') |
+            db_models.Q(title__istartswith='ladies:') |
+            db_models.Q(title__istartswith='proximus for you:') |
+            db_models.Q(title__istartswith='horror night:') |
+            db_models.Q(title__istartswith='filmclub') |
+            db_models.Q(title__istartswith='knit & watch:') |
+            db_models.Q(title__istartswith='cast visit:') |
+            db_models.Q(title__istartswith='visite d') |
+            db_models.Q(title__istartswith='classics:') |
+            db_models.Q(title__istartswith='event:') |
+            db_models.Q(title__istartswith='back2back:') |
+            db_models.Q(title__istartswith='double bill:') |
+            db_models.Q(title__istartswith='discovery screening:') |
+            db_models.Q(title__iendswith=' night')
+        )
+        imdb_covered_by_tmdb = set(
+            Film.objects.filter(tmdb_id__isnull=False, imdb_code__gt='')
+            .exclude(_special_event_q)
+            .values_list('imdb_code', flat=True)
+        )
+        # Parmi les films sans tmdb_id, dédupliquer aussi par imdb_code (garder le plus ancien non-événement)
+        _notmdb_imdb_min = set(
+            Film.objects.filter(tmdb_id__isnull=True, imdb_code__gt='')
+            .exclude(kinepolis_id__startswith='tmdb_')
+            .exclude(_special_event_q)
+            .values('imdb_code').annotate(m=Min('id')).values_list('m', flat=True)
+        )
+        title_first_ids = (
+            Film.objects.filter(tmdb_id__isnull=True).exclude(kinepolis_id__startswith='tmdb_')
+            .exclude(title__in=titles_covered_by_tmdb)
+            .exclude(imdb_code__in=imdb_covered_by_tmdb)
+            .filter(
+                db_models.Q(imdb_code__isnull=True) | db_models.Q(imdb_code='') |
+                db_models.Q(id__in=_notmdb_imdb_min)
+            )
+            .values('title').annotate(first_id=Min('id')).values_list('first_id', flat=True)
+        )
+        # Films avec "(Titre Anglais)" dans le nom → exclure si le titre anglais est déjà enrichi
+        import re as _re
+        enriched_titles = set(
+            Film.objects.filter(tmdb_id__isnull=False)
+            .exclude(kinepolis_id__startswith='tmdb_')
+            .values_list('title', flat=True)
+        )
+        paren_exclude_ids = []
+        for fid, ftitle in Film.objects.filter(
+            id__in=list(title_first_ids), tmdb_id__isnull=True
+        ).values_list('id', 'title'):
+            m = _re.search(r'\(([^)]+)\)$', ftitle)
+            if m and m.group(1) in enriched_titles:
+                paren_exclude_ids.append(fid)
+
+        final_ids = [i for i in list(tmdb_first_ids) + list(title_first_ids) if i not in paren_exclude_ids]
+        qs = qs.filter(id__in=final_ids)
+
         is_future_param = params.get('is_future')
         qs = qs.distinct()
 
         if is_future_param is not None:
             if is_future_param.lower() in ('true', '1'):
-                # Bientôt : tri par date de sortie croissante
-                return qs.order_by('release_date')
+                return qs.filter(is_future=True).order_by('release_date')
             else:
-                # À l'affiche : masquer les films sans séance à venir
-                return qs.filter(seances__showtime__gte=timezone.now()).distinct()
+                # À l'affiche : films sortis (is_future=False) avec séances à venir
+                now = timezone.now()
+                tmdb_ids_with_seances = (
+                    Film.objects.filter(seances__showtime__gte=now, tmdb_id__isnull=False)
+                    .values_list('tmdb_id', flat=True).distinct()
+                )
+                titles_with_seances = (
+                    Film.objects.filter(seances__showtime__gte=now, tmdb_id__isnull=True)
+                    .values_list('title', flat=True).distinct()
+                )
+                imdb_codes_with_seances = (
+                    Film.objects.filter(seances__showtime__gte=now, imdb_code__gt='')
+                    .values_list('imdb_code', flat=True).distinct()
+                )
+                return qs.filter(is_future=False).filter(
+                    db_models.Q(tmdb_id__in=tmdb_ids_with_seances) |
+                    db_models.Q(title__in=titles_with_seances) |
+                    db_models.Q(imdb_code__in=imdb_codes_with_seances)
+                ).distinct()
 
         return qs
 
@@ -95,9 +209,16 @@ class FilmViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, url_path='seances')
     def seances(self, request, pk=None):
         film = self.get_object()
+        # Inclure les séances de tous les variants (même tmdb_id, imdb_code, ou titre)
+        q = db_models.Q(title=film.title)
+        if film.tmdb_id:
+            q |= db_models.Q(tmdb_id=film.tmdb_id)
+        if film.imdb_code:
+            q |= db_models.Q(imdb_code=film.imdb_code)
+        film_ids = Film.objects.filter(q).values_list('id', flat=True)
         seances = (
             Seance.objects
-            .filter(film=film, showtime__gte=timezone.now())
+            .filter(film_id__in=film_ids, showtime__gte=timezone.now())
             .select_related('cinema')
             .order_by('showtime')
         )
@@ -105,11 +226,12 @@ class FilmViewSet(viewsets.ReadOnlyModelViewSet):
         if cinema_id:
             seances = seances.filter(cinema__kinepolis_id=cinema_id)
 
+        # Détection audio via raw_attributes ('english' = VO/VOST)
         lang_filter = request.query_params.get('language')
         if lang_filter == 'vf':
-            seances = seances.filter(language__in=['FR', 'NL'])
+            seances = seances.exclude(raw_attributes__icontains='english')
         elif lang_filter == 'vo':
-            seances = seances.exclude(language__in=['FR', 'NL'])
+            seances = seances.filter(raw_attributes__icontains='english')
 
         serializer = SeanceSerializer(seances, many=True)
         return Response(serializer.data)

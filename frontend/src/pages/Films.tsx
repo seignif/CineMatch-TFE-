@@ -22,21 +22,38 @@ export default function Films() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const { user } = useAuthStore()
+
+  // Tout l'état de navigation vit dans l'URL pour que le bouton retour restaure la position exacte
+  const isFuture = searchParams.get('tab') === 'bientot'
+  const page = parseInt(searchParams.get('page') || '1', 10)
+  const search = searchParams.get('search') || ''
+  const selectedGenre = searchParams.get('genre') || ''
+  const selectedRating = searchParams.get('rating') ? parseInt(searchParams.get('rating')!, 10) : null
+  const showEvents = searchParams.get('events') === '1'
+  const selectedMaxAge = searchParams.get('max_age') || ''
+  const selectedLang = searchParams.get('lang') || ''
+
   const [films, setFilms] = useState<Film[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [isFuture, setIsFuture] = useState(searchParams.get('tab') === 'bientot')
-  const [page, setPage] = useState(1)
   const [totalCount, setTotalCount] = useState(0)
-  const [searchInput, setSearchInput] = useState('')
+  const [searchInput, setSearchInput] = useState(search)
   const [recommendations, setRecommendations] = useState<FilmRecommendation[]>([])
   const [showFilters, setShowFilters] = useState(false)
   const [genres, setGenres] = useState<string[]>([])
-  const [selectedGenre, setSelectedGenre] = useState<string>('')
 
-  const [selectedRating, setSelectedRating] = useState<number | null>(null)
-  const [showEvents, setShowEvents] = useState(false)
-  const [selectedMaxAge, setSelectedMaxAge] = useState<string>('')
+  const updateParams = (updates: Record<string, string | null>) => {
+    setSearchParams(prev => {
+      const next = new URLSearchParams(prev)
+      Object.entries(updates).forEach(([k, v]) => {
+        if (v === null || v === '' || v === '0') next.delete(k)
+        else next.set(k, v)
+      })
+      // Réinitialiser la page si autre chose que la page change
+      const pageKeys = ['page']
+      if (Object.keys(updates).some(k => !pageKeys.includes(k))) next.delete('page')
+      return next
+    }, { replace: false })
+  }
 
   const currentMood = user?.profile?.mood
   useEffect(() => {
@@ -62,6 +79,7 @@ export default function Films() {
         min_rating: selectedRating ?? undefined,
         show_events: showEvents ? 'true' : 'false',
         max_age: selectedMaxAge || undefined,
+        seance_lang: selectedLang || undefined,
       })
       const data: PaginatedResponse<Film> = res.data
       setFilms(data.results)
@@ -71,11 +89,7 @@ export default function Films() {
     } finally {
       setLoading(false)
     }
-  }, [search, isFuture, page, selectedGenre, selectedRating, showEvents, selectedMaxAge])
-
-  useEffect(() => {
-    setPage(1)
-  }, [search, isFuture, selectedGenre, selectedRating, showEvents, selectedMaxAge])
+  }, [search, isFuture, page, selectedGenre, selectedRating, showEvents, selectedMaxAge, selectedLang])
 
   useEffect(() => {
     fetchFilms()
@@ -83,19 +97,16 @@ export default function Films() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    setSearch(searchInput)
+    updateParams({ search: searchInput || null })
   }
 
   const clearSearch = () => {
     setSearchInput('')
-    setSearch('')
+    updateParams({ search: null })
   }
 
   const clearFilters = () => {
-    setSelectedGenre('')
-    setSelectedRating(null)
-    setShowEvents(false)
-    setSelectedMaxAge('')
+    updateParams({ genre: null, rating: null, events: null, max_age: null, lang: null })
   }
 
   const activeFilterCount = [
@@ -103,6 +114,7 @@ export default function Films() {
     selectedRating !== null,
     showEvents,
     selectedMaxAge !== '',
+    selectedLang !== '',
   ].filter(Boolean).length
   const totalPages = Math.ceil(totalCount / 20)
 
@@ -174,7 +186,7 @@ export default function Films() {
 
         <div className="flex items-center gap-1 glass rounded-lg p-1 shrink-0">
           <button
-            onClick={() => { setIsFuture(false); setSearchParams({}) }}
+            onClick={() => setSearchParams({})}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               !isFuture ? 'bg-[var(--accent-red)] text-white' : 'text-[var(--text-muted)] hover:text-white'
             }`}
@@ -182,7 +194,7 @@ export default function Films() {
             À l'affiche
           </button>
           <button
-            onClick={() => { setIsFuture(true); setSearchParams({ tab: 'bientot' }) }}
+            onClick={() => setSearchParams({ tab: 'bientot' })}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               isFuture ? 'bg-[var(--accent-red)] text-white' : 'text-[var(--text-muted)] hover:text-white'
             }`}
@@ -220,7 +232,7 @@ export default function Films() {
               {genres.map(g => (
                 <button
                   key={g}
-                  onClick={() => setSelectedGenre(selectedGenre === g ? '' : g)}
+                  onClick={() => updateParams({ genre: selectedGenre === g ? null : g })}
                   className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
                     selectedGenre === g
                       ? 'bg-[var(--accent-red)] text-white'
@@ -240,7 +252,7 @@ export default function Films() {
               {RATINGS.map(({ value, label }) => (
                 <button
                   key={value}
-                  onClick={() => setSelectedRating(selectedRating === value ? null : value)}
+                  onClick={() => updateParams({ rating: selectedRating === value ? null : String(value) })}
                   className={`px-4 py-1.5 rounded-full text-xs font-medium transition-colors ${
                     selectedRating === value
                       ? 'bg-[var(--accent-red)] text-white'
@@ -266,9 +278,33 @@ export default function Films() {
               ].map(opt => (
                 <button
                   key={opt.value}
-                  onClick={() => setSelectedMaxAge(selectedMaxAge === opt.value ? '' : opt.value)}
+                  onClick={() => updateParams({ max_age: selectedMaxAge === opt.value ? null : opt.value || null })}
                   className={`px-4 py-1.5 rounded-full text-xs font-medium transition-colors ${
                     selectedMaxAge === opt.value
+                      ? 'bg-[var(--accent-red)] text-white'
+                      : 'glass text-[var(--text-muted)] hover:text-white'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Langue des séances */}
+          <div>
+            <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-2">Langue des séances</p>
+            <div className="flex gap-2">
+              {[
+                { value: '', label: 'Toutes' },
+                { value: 'vf', label: 'VF / NL' },
+                { value: 'vo', label: 'VO / VOST' },
+              ].map(opt => (
+                <button
+                  key={opt.value}
+                  onClick={() => updateParams({ lang: selectedLang === opt.value ? null : opt.value || null })}
+                  className={`px-4 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                    selectedLang === opt.value
                       ? 'bg-[var(--accent-red)] text-white'
                       : 'glass text-[var(--text-muted)] hover:text-white'
                   }`}
@@ -284,7 +320,7 @@ export default function Films() {
             <input
               type="checkbox"
               checked={showEvents}
-              onChange={e => setShowEvents(e.target.checked)}
+              onChange={e => updateParams({ events: e.target.checked ? '1' : null })}
               className="w-4 h-4 accent-[var(--accent-red)]"
             />
             <span className="text-sm text-[var(--text-muted)]">
@@ -314,7 +350,7 @@ export default function Films() {
           {selectedGenre && (
             <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs cursor-pointer"
               style={{ background: 'rgba(230,57,70,0.15)', border: '1px solid rgba(230,57,70,0.3)', color: 'var(--text-primary)' }}
-              onClick={() => setSelectedGenre('')}>
+              onClick={() => updateParams({ genre: null })}>
               {selectedGenre} <X size={10} />
             </span>
           )}
@@ -322,7 +358,7 @@ export default function Films() {
           {selectedRating !== null && (
             <span className="flex items-center gap-1 px-3 py-1 rounded-full text-xs cursor-pointer"
               style={{ background: 'rgba(230,57,70,0.15)', border: '1px solid rgba(230,57,70,0.3)', color: 'var(--text-primary)' }}
-              onClick={() => setSelectedRating(null)}>
+              onClick={() => updateParams({ rating: null })}>
               ★ ≥ {selectedRating} <X size={10} />
             </span>
           )}
@@ -348,7 +384,7 @@ export default function Films() {
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
           {films.map(film => (
-            <FilmCard key={film.id} film={film} />
+            <FilmCard key={film.id} film={film} hideFutureBadge={!isFuture} />
           ))}
         </div>
       )}
@@ -358,7 +394,7 @@ export default function Films() {
         <div className="flex items-center justify-center gap-2 mt-10">
           <button
             disabled={page === 1}
-            onClick={() => setPage(p => p - 1)}
+            onClick={() => updateParams({ page: String(page - 1) })}
             className="btn-secondary px-4 py-2 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
           >
             ← Précédent
@@ -368,7 +404,7 @@ export default function Films() {
           </span>
           <button
             disabled={page === totalPages}
-            onClick={() => setPage(p => p + 1)}
+            onClick={() => updateParams({ page: String(page + 1) })}
             className="btn-secondary px-4 py-2 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Suivant →

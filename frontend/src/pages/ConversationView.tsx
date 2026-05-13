@@ -67,7 +67,9 @@ export default function ConversationView() {
             <div className="w-9 h-9 rounded-full overflow-hidden border"
               style={{ borderColor: 'var(--accent-red)' }}>
               {other.profile_picture ? (
-                <img src={mediaUrl(other.profile_picture)!} alt={other.first_name} className="w-full h-full object-cover" />
+                <img src={mediaUrl(other.profile_picture)!} alt={other.first_name}
+                  onError={e => { e.currentTarget.src = '/default-avatar.svg' }}
+                  className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-sm font-bold"
                   style={{ background: 'var(--bg-card)', color: 'var(--accent-red)' }}>

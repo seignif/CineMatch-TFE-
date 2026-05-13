@@ -155,9 +155,9 @@ export default function FilmDetail() {
   const cinemas = Array.from(new Set(seances.map(s => s.cinema.name)))
 
   const langFilteredSeances = langFilter === 'vf'
-    ? seances.filter(s => ['FR', 'NL'].includes(s.language))
+    ? seances.filter(s => !s.raw_attributes.toLowerCase().includes('english'))
     : langFilter === 'vo'
-      ? seances.filter(s => !['FR', 'NL'].includes(s.language))
+      ? seances.filter(s => s.raw_attributes.toLowerCase().includes('english'))
       : seances
 
   const filteredSeances = selectedCinema === 'all'

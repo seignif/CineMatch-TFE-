@@ -59,6 +59,7 @@ export const filmsApi = {
     min_rating?: number
     show_events?: string
     max_age?: string
+    seance_lang?: string
   }) => api.get('/films/films/', { params }),
   getById: (id: number) => api.get(`/films/films/${id}/`),
   getSeances: (id: number, params?: { language?: string }) =>

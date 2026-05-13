@@ -184,13 +184,14 @@ class ReputationView(APIView):
 
 class RecommendationsView(APIView):
     """GET /api/users/recommendations/ — Films recommandés personnalisés (US-035)."""
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
     def get(self, request):
         from apps.films.services.recommendation_service import RecommendationService
         from apps.films.serializers import FilmSerializer
 
-        recs = RecommendationService().get_recommendations(request.user, limit=5)
+        user = request.user if request.user.is_authenticated else None
+        recs = RecommendationService().get_recommendations(user, limit=5)
         data = [
             {
                 'film': FilmSerializer(r['film'], context={'request': request}).data,

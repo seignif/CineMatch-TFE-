@@ -36,6 +36,7 @@ export default function Profile() {
   // Form state
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
+  const [username, setUsername] = useState('')
   const [city, setCity] = useState('')
   const [dateOfBirth, setDateOfBirth] = useState('')
   const [bio, setBio] = useState('')
@@ -63,11 +64,15 @@ export default function Profile() {
     if (user) {
       setFirstName(user.first_name)
       setLastName(user.last_name)
+      setUsername(user.username || '')
       setCity(user.city || '')
       setDateOfBirth(user.date_of_birth || '')
       setBio(user.profile?.bio || '')
       setMood(user.profile?.mood || '')
-      setGenrePrefs(user.profile?.genre_preferences || {})
+      const rawPrefs = user.profile?.genre_preferences || {}
+      setGenrePrefs(Object.fromEntries(
+        Object.entries(rawPrefs).map(([k, v]) => [k, Math.min(v as number, 5)])
+      ))
       setFilmsSignature(user.profile?.films_signature || [])
       setLangPref(user.profile?.language_preference || 'both')
       setLatitude(user.profile?.latitude != null ? Number(user.profile.latitude) : null)
@@ -113,7 +118,7 @@ export default function Profile() {
     e.preventDefault()
     setLoading(true)
     try {
-      await usersApi.updateMe({ first_name: firstName, last_name: lastName, city, date_of_birth: dateOfBirth || null })
+      await usersApi.updateMe({ first_name: firstName, last_name: lastName, username, city, date_of_birth: dateOfBirth || null })
       await fetchMe()
       showSuccess('Informations mises à jour !')
     } finally {
@@ -188,8 +193,12 @@ export default function Profile() {
         delete next[genre]
         return next
       }
-      return { ...prev, [genre]: 7 }
+      return { ...prev, [genre]: 3 }
     })
+  }
+
+  const setGenreRating = (genre: string, value: number) => {
+    setGenrePrefs(prev => ({ ...prev, [genre]: value }))
   }
 
   if (!user) return null
@@ -223,6 +232,7 @@ export default function Profile() {
 
         <div>
           <h1 className="text-2xl font-semibold text-white">{user.first_name} {user.last_name}</h1>
+          <p className="text-[var(--text-muted)] text-sm">@{user.username}</p>
           <p className="text-[var(--text-muted)] text-sm">{user.email}</p>
           {user.city && <p className="text-[var(--text-muted)] text-sm flex items-center gap-1"><MapPin size={12} />{user.city}</p>}
         </div>
@@ -282,6 +292,11 @@ export default function Profile() {
               <input value={lastName} onChange={e => setLastName(e.target.value)}
                 className="input-field" required />
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[var(--text-muted)] mb-1.5">Nom d'utilisateur</label>
+            <input value={username} onChange={e => setUsername(e.target.value)}
+              placeholder="@monpseudo" className="input-field" required minLength={3} maxLength={150} />
           </div>
           <div>
             <label className="block text-sm font-medium text-[var(--text-muted)] mb-1.5">Email</label>
@@ -430,6 +445,32 @@ export default function Profile() {
                 )
               })}
             </div>
+
+            {Object.keys(genrePrefs).length > 0 && (
+              <div className="mt-4 space-y-2.5">
+                <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-3">Intensité par genre</p>
+                {Object.entries(genrePrefs).map(([genre, rating]) => (
+                  <div key={genre} className="flex items-center gap-3">
+                    <span className="text-sm text-white w-28 shrink-0 truncate">{genre}</span>
+                    <div className="flex gap-1.5">
+                      {[1, 2, 3, 4, 5].map(v => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => setGenreRating(genre, v)}
+                          className="w-5 h-5 rounded-full transition-all hover:scale-110"
+                          style={{
+                            background: v <= rating ? 'var(--accent-red)' : 'rgba(255,255,255,0.12)',
+                            border: v <= rating ? '1px solid var(--accent-red)' : '1px solid rgba(255,255,255,0.2)',
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-xs text-[var(--text-muted)] w-6 text-right">{rating}/5</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Films signature */}

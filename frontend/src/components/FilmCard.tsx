@@ -4,6 +4,7 @@ import type { Film } from '../types'
 
 interface FilmCardProps {
   film: Film
+  hideFutureBadge?: boolean
 }
 
 function formatDuration(minutes: number | null) {
@@ -37,7 +38,7 @@ function FilmPoster({ film }: { film: Film }) {
   )
 }
 
-export default function FilmCard({ film }: FilmCardProps) {
+export default function FilmCard({ film, hideFutureBadge = false }: FilmCardProps) {
   const navigate = useNavigate()
 
   return (
@@ -49,7 +50,7 @@ export default function FilmCard({ film }: FilmCardProps) {
 
       {/* Badges */}
       <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">
-        {film.is_future && (
+        {film.is_future && !hideFutureBadge && (
           <span className="badge-red text-xs">Bientôt</span>
         )}
         {film.tmdb_rating && (

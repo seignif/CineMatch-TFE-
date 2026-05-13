@@ -73,6 +73,7 @@ export default function Chat() {
                     style={{ borderColor: 'var(--accent-red)' }}>
                     {other.profile_picture ? (
                       <img src={mediaUrl(other.profile_picture)!} alt={other.first_name}
+                        onError={e => { e.currentTarget.src = '/default-avatar.svg' }}
                         className="w-full h-full object-cover" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center text-xl font-bold"

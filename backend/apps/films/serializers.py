@@ -62,7 +62,7 @@ class WatchedFilmSerializer(serializers.ModelSerializer):
 
 class PublicWatchedFilmSerializer(serializers.ModelSerializer):
     """US-064 : Avis public visible par la communauté."""
-    author_name = serializers.CharField(source='user.first_name', read_only=True)
+    author_name = serializers.CharField(source='user.username', read_only=True)
     author_picture = serializers.SerializerMethodField()
 
     class Meta:

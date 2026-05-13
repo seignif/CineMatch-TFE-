@@ -83,11 +83,11 @@ class TMDbService:
         return None
 
     def get_details(self, tmdb_id: int):
-        """Récupère les détails complets + videos d'un film TMDb."""
-        cache_key = f'tmdb_details_{tmdb_id}'
+        """Récupère les détails complets + videos + release_dates d'un film TMDb."""
+        cache_key = f'tmdb_details_v2_{tmdb_id}'
         return self._get(
             f'/movie/{tmdb_id}',
-            extra_params={'append_to_response': 'videos'},
+            extra_params={'append_to_response': 'videos,release_dates'},
             cache_key=cache_key,
         )
 
@@ -171,6 +171,32 @@ class TMDbService:
         return ''
 
     # ------------------------------------------------------------------
+    # Age certification extraction
+    # ------------------------------------------------------------------
+
+    # Mapping certification → min_age, par ordre de priorité de pays
+    _CERT_TO_AGE = {
+        # Belgique / France
+        'KT': 0, 'AL': 0, 'TP': 0, 'U': 0, 'G': 0, 'Tout public': 0,
+        '6': 6, '9': 9, '10': 10, '12': 12, '14': 14, '16': 16, '18': 18,
+        # USA
+        'PG': 6, 'PG-13': 12, 'R': 16, 'NC-17': 18,
+    }
+    _CERT_COUNTRY_PRIORITY = ['BE', 'FR', 'US', 'GB']
+
+    def _extract_min_age(self, details: dict) -> int | None:
+        """Extrait le min_age depuis les certifications TMDb (BE > FR > US > GB)."""
+        results = details.get('release_dates', {}).get('results', [])
+        by_country = {r['iso_3166_1']: r.get('release_dates', []) for r in results}
+        for country in self._CERT_COUNTRY_PRIORITY:
+            releases = by_country.get(country, [])
+            for release in releases:
+                cert = release.get('certification', '').strip()
+                if cert in self._CERT_TO_AGE:
+                    return self._CERT_TO_AGE[cert]
+        return None
+
+    # ------------------------------------------------------------------
     # Genre sync
     # ------------------------------------------------------------------
 
@@ -241,6 +267,9 @@ class TMDbService:
         updates = {
             'trailer_youtube_key': self._extract_trailer_key(details),
         }
+        min_age = self._extract_min_age(details)
+        if min_age is not None and film.min_age is None:
+            updates['min_age'] = min_age
         if not tmdb_id_already_used:
             updates['tmdb_id'] = tmdb_id
 
