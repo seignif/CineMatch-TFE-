@@ -124,6 +124,7 @@ class Report(models.Model):
 
     TYPE_CHOICES = [
         ('message', 'Message de chat'),
+        ('group_message', 'Message de groupe'),
         ('post', "Post L'Entracte"),
         ('comment', "Commentaire L'Entracte"),
     ]

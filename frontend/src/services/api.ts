@@ -198,7 +198,7 @@ export const socialApi = {
   markAllRead: () => api.post('/social/notifications/read/'),
   markOneRead: (id: number) => api.post(`/social/notifications/${id}/read/`),
   createReport: (data: {
-    type: 'message' | 'post' | 'comment'
+    type: 'message' | 'group_message' | 'post' | 'comment'
     reason: string
     description?: string
     post?: number
