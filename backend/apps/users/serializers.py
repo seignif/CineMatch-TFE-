@@ -13,13 +13,22 @@ class RegisterSerializer(serializers.ModelSerializer):
         write_only=True, required=True, validators=[validate_password]
     )
     password2 = serializers.CharField(write_only=True, required=True)
+    cgu_accepted = serializers.BooleanField(write_only=True)
 
     class Meta:
         model = User
         fields = [
             'email', 'username', 'password', 'password2',
             'first_name', 'last_name', 'date_of_birth', 'city',
+            'cgu_accepted',
         ]
+
+    def validate_cgu_accepted(self, value):
+        if not value:
+            raise serializers.ValidationError(
+                "Vous devez accepter les CGU pour créer un compte."
+            )
+        return value
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
@@ -30,9 +39,12 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data.pop('password2')
+        validated_data.pop('cgu_accepted')
         password = validated_data.pop('password')
+        from django.utils import timezone
         user = User(**validated_data)
         user.set_password(password)
+        user.cgu_accepted_at = timezone.now()
         user.save()
         # Signal crée déjà le profil, get_or_create pour sécurité
         UserProfile.objects.get_or_create(user=user)
@@ -48,6 +60,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'bio', 'profile_picture', 'mood',
             'genre_preferences', 'films_signature',
             'badges', 'stats',
+            'language_preference', 'latitude', 'longitude', 'search_radius_km',
         ]
 
 
@@ -58,9 +71,9 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'email', 'username', 'first_name', 'last_name',
-            'date_of_birth', 'city', 'profile',
+            'date_of_birth', 'city', 'profile', 'is_email_verified',
         ]
-        read_only_fields = ['id', 'email']
+        read_only_fields = ['id', 'email', 'is_email_verified']
 
 
 class UpdateProfileSerializer(serializers.ModelSerializer):
@@ -70,10 +83,26 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False,
     )
+    # Overrider avec max_digits suffisant pour accepter la précision GPS du navigateur
+    latitude = serializers.DecimalField(
+        max_digits=18, decimal_places=15, allow_null=True, required=False
+    )
+    longitude = serializers.DecimalField(
+        max_digits=18, decimal_places=15, allow_null=True, required=False
+    )
 
     class Meta:
         model = UserProfile
-        fields = ['bio', 'mood', 'genre_preferences', 'films_signature_ids']
+        fields = [
+            'bio', 'mood', 'genre_preferences', 'films_signature_ids',
+            'language_preference', 'latitude', 'longitude', 'search_radius_km',
+        ]
+
+    def validate_latitude(self, value):
+        return round(float(value), 6) if value is not None else None
+
+    def validate_longitude(self, value):
+        return round(float(value), 6) if value is not None else None
 
     def validate_films_signature_ids(self, value):
         if len(value) > 5:

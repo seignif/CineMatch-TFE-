@@ -9,9 +9,9 @@ app.autodiscover_tasks()
 
 # Tâches périodiques
 app.conf.beat_schedule = {
-    'sync-kinepolis-every-5h': {
+    'sync-kinepolis-daily': {
         'task': 'apps.films.tasks.sync_kinepolis_all',
-        'schedule': 18000.0,  # Toutes les 5h
+        'schedule': 86400.0,  # Quotidien (24h)
         'options': {'expires': 3600},
     },
     'enrich-tmdb-daily': {

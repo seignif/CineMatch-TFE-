@@ -11,6 +11,14 @@ import Matching from './pages/Matching'
 import Matches from './pages/Matches'
 import Chat from './pages/Chat'
 import ConversationView from './pages/ConversationView'
+import Outings from './pages/Outings'
+import Groups from './pages/Groups'
+import GroupView from './pages/GroupView'
+import Journal from './pages/Journal'
+import VerifyEmail from './pages/VerifyEmail'
+import Entracte from './pages/Entracte'
+import Notifications from './pages/Notifications'
+import CGU from './pages/CGU'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
@@ -30,14 +38,22 @@ function App() {
         <Route path="/" element={<Navigate to="/films" replace />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/verify-email/:token" element={<VerifyEmail />} />
+        <Route path="/cgu" element={<CGU />} />
         <Route element={<Layout />}>
           <Route path="/films" element={<Films />} />
           <Route path="/films/:id" element={<FilmDetail />} />
           <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
           <Route path="/matching" element={<PrivateRoute><Matching /></PrivateRoute>} />
           <Route path="/matches" element={<PrivateRoute><Matches /></PrivateRoute>} />
+          <Route path="/outings" element={<PrivateRoute><Outings /></PrivateRoute>} />
+          <Route path="/groups" element={<PrivateRoute><Groups /></PrivateRoute>} />
+          <Route path="/groups/:id" element={<PrivateRoute><GroupView /></PrivateRoute>} />
           <Route path="/chat" element={<PrivateRoute><Chat /></PrivateRoute>} />
           <Route path="/chat/:id" element={<PrivateRoute><ConversationView /></PrivateRoute>} />
+          <Route path="/journal" element={<PrivateRoute><Journal /></PrivateRoute>} />
+          <Route path="/entracte" element={<PrivateRoute><Entracte /></PrivateRoute>} />
+          <Route path="/notifications" element={<PrivateRoute><Notifications /></PrivateRoute>} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -83,13 +83,59 @@ class TMDbService:
         return None
 
     def get_details(self, tmdb_id: int):
-        """Récupère les détails complets + videos d'un film TMDb."""
-        cache_key = f'tmdb_details_{tmdb_id}'
+        """Récupère les détails complets + videos + release_dates d'un film TMDb."""
+        cache_key = f'tmdb_details_v2_{tmdb_id}'
         return self._get(
             f'/movie/{tmdb_id}',
-            extra_params={'append_to_response': 'videos'},
+            extra_params={'append_to_response': 'videos,release_dates'},
             cache_key=cache_key,
         )
+
+    def get_movie_credits(self, tmdb_id: int) -> dict | None:
+        """Récupère acteurs + équipe technique depuis TMDb. Cache Redis 24h."""
+        cache_key = f'tmdb_credits_{tmdb_id}'
+        cached = cache.get(cache_key)
+        if cached:
+            return cached
+        data = self._get(f'/movie/{tmdb_id}/credits')
+        if data:
+            cache.set(cache_key, data, CACHE_TTL)
+        return data
+
+    def extract_cast(self, credits_data: dict, limit: int = 8) -> list:
+        """Extrait les N premiers acteurs, construit l'URL de photo."""
+        cast = []
+        for actor in credits_data.get('cast', [])[:limit]:
+            profile_path = actor.get('profile_path', '')
+            cast.append({
+                'name': actor.get('name', ''),
+                'character': actor.get('character', ''),
+                'profile_path': profile_path,
+                'profile_url': self._build_image_url(profile_path, 'w185') if profile_path else '',
+                'order': actor.get('order', 0),
+            })
+        return cast
+
+    def extract_crew(self, credits_data: dict) -> list:
+        """Extrait réalisateur et scénaristes (max 3, dédoublonnés)."""
+        IMPORTANT_JOBS = ['Director', 'Screenplay', 'Writer', 'Story']
+        crew = []
+        seen_names: set = set()
+        for member in credits_data.get('crew', []):
+            job = member.get('job', '')
+            name = member.get('name', '')
+            if job in IMPORTANT_JOBS and name not in seen_names:
+                profile_path = member.get('profile_path', '')
+                crew.append({
+                    'name': name,
+                    'job': job,
+                    'profile_path': profile_path,
+                    'profile_url': self._build_image_url(profile_path, 'w185') if profile_path else '',
+                })
+                seen_names.add(name)
+                if len(crew) >= 3:
+                    break
+        return crew
 
     # ------------------------------------------------------------------
     # Image URL helpers
@@ -125,6 +171,32 @@ class TMDbService:
         return ''
 
     # ------------------------------------------------------------------
+    # Age certification extraction
+    # ------------------------------------------------------------------
+
+    # Mapping certification → min_age, par ordre de priorité de pays
+    _CERT_TO_AGE = {
+        # Belgique / France
+        'KT': 0, 'AL': 0, 'TP': 0, 'U': 0, 'G': 0, 'Tout public': 0,
+        '6': 6, '9': 9, '10': 10, '12': 12, '14': 14, '16': 16, '18': 18,
+        # USA
+        'PG': 6, 'PG-13': 12, 'R': 16, 'NC-17': 18,
+    }
+    _CERT_COUNTRY_PRIORITY = ['BE', 'FR', 'US', 'GB']
+
+    def _extract_min_age(self, details: dict) -> int | None:
+        """Extrait le min_age depuis les certifications TMDb (BE > FR > US > GB)."""
+        results = details.get('release_dates', {}).get('results', [])
+        by_country = {r['iso_3166_1']: r.get('release_dates', []) for r in results}
+        for country in self._CERT_COUNTRY_PRIORITY:
+            releases = by_country.get(country, [])
+            for release in releases:
+                cert = release.get('certification', '').strip()
+                if cert in self._CERT_TO_AGE:
+                    return self._CERT_TO_AGE[cert]
+        return None
+
+    # ------------------------------------------------------------------
     # Genre sync
     # ------------------------------------------------------------------
 
@@ -158,22 +230,22 @@ class TMDbService:
         """
         from apps.films.models import Genre
 
-        # 1. Find TMDb entry
+        # 1. Find TMDb entry — utilise le tmdb_id existant si disponible
         tmdb_data = None
-        if film.imdb_code:
-            tmdb_data = self.find_by_imdb(film.imdb_code)
+        tmdb_id = film.tmdb_id
 
-        if not tmdb_data:
-            year = film.release_date.year if film.release_date else None
-            tmdb_data = self.search_by_title(film.title, year=year)
-
-        if not tmdb_data:
-            logger.debug(f"[TMDb] Film non trouve: {film.title}")
-            return False
-
-        tmdb_id = tmdb_data.get('id')
         if not tmdb_id:
-            return False
+            if film.imdb_code:
+                tmdb_data = self.find_by_imdb(film.imdb_code)
+            if not tmdb_data:
+                year = film.release_date.year if film.release_date else None
+                tmdb_data = self.search_by_title(film.title, year=year)
+            if not tmdb_data:
+                logger.debug(f"[TMDb] Film non trouve: {film.title}")
+                return False
+            tmdb_id = tmdb_data.get('id')
+            if not tmdb_id:
+                return False
 
         # 2. Get full details (with videos)
         details = self.get_details(tmdb_id)
@@ -181,9 +253,10 @@ class TMDbService:
             return False
 
         # 3. Build update dict
-        poster_path = details.get('poster_path') or tmdb_data.get('poster_path', '')
-        backdrop_path = details.get('backdrop_path') or tmdb_data.get('backdrop_path', '')
-        vote_average = details.get('vote_average') or tmdb_data.get('vote_average')
+        fallback = tmdb_data or {}
+        poster_path = details.get('poster_path') or fallback.get('poster_path', '')
+        backdrop_path = details.get('backdrop_path') or fallback.get('backdrop_path', '')
+        vote_average = details.get('vote_average') or fallback.get('vote_average')
 
         # Si un autre film a déjà ce tmdb_id, on n'écrase pas la clé unique
         from apps.films.models import Film as FilmModel
@@ -194,6 +267,9 @@ class TMDbService:
         updates = {
             'trailer_youtube_key': self._extract_trailer_key(details),
         }
+        min_age = self._extract_min_age(details)
+        if min_age is not None and film.min_age is None:
+            updates['min_age'] = min_age
         if not tmdb_id_already_used:
             updates['tmdb_id'] = tmdb_id
 
@@ -210,9 +286,19 @@ class TMDbService:
 
         for field, value in updates.items():
             setattr(film, field, value)
+
+        # 4. Acteurs & équipe technique
+        if not film.cast:
+            credits = self.get_movie_credits(tmdb_id)
+            if credits:
+                updates['cast'] = self.extract_cast(credits, limit=8)
+                updates['crew'] = self.extract_crew(credits)
+                film.cast = updates['cast']
+                film.crew = updates['crew']
+
         film.save(update_fields=list(updates.keys()))
 
-        # 4. Sync genres
+        # 6. Sync genres
         tmdb_genre_ids = [g['id'] for g in details.get('genres', [])]
         if tmdb_genre_ids:
             genres = Genre.objects.filter(tmdb_id__in=tmdb_genre_ids)
@@ -226,6 +312,29 @@ class TMDbService:
     # Bulk enrichment
     # ------------------------------------------------------------------
 
+    def enrich_credits_only(self) -> dict:
+        """Enrichit uniquement les films avec tmdb_id mais sans cast."""
+        from apps.films.models import Film
+        qs = Film.objects.filter(tmdb_id__isnull=False, cast=[])
+        total = qs.count()
+        enriched = 0
+        failed = 0
+        logger.info(f"[TMDb] Credits-only: {total} films à enrichir")
+        for film in qs.iterator():
+            try:
+                credits = self.get_movie_credits(film.tmdb_id)
+                if credits:
+                    film.cast = self.extract_cast(credits, limit=8)
+                    film.crew = self.extract_crew(credits)
+                    film.save(update_fields=['cast', 'crew'])
+                    enriched += 1
+                else:
+                    failed += 1
+            except Exception as e:
+                logger.warning(f"[TMDb] Credits erreur '{film.title}': {e}")
+                failed += 1
+        return {'total': total, 'enriched': enriched, 'failed': failed}
+
     def enrich_all(self, force: bool = False) -> dict:
         """
         Enrichit tous les films qui n'ont pas encore de tmdb_id.
@@ -233,7 +342,16 @@ class TMDbService:
         """
         from apps.films.models import Film
 
-        qs = Film.objects.all() if force else Film.objects.filter(tmdb_id__isnull=True)
+        if force:
+            qs = Film.objects.all()
+        else:
+            from django.db.models import Q
+            qs = Film.objects.filter(
+                Q(tmdb_id__isnull=True) |                                          # jamais enrichi
+                Q(poster_url='') |                                                 # poster perdu
+                Q(tmdb_id__isnull=False, tmdb_rating__isnull=True) |              # enrichissement incomplet
+                Q(tmdb_id__isnull=False, poster_url__startswith='https://cdn.kinepolis')  # poster Kinepolis CDN remplace par TMDb
+            )
         total = qs.count()
         enriched = 0
         failed = 0

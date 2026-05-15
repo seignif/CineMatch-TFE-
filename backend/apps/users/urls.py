@@ -11,8 +11,21 @@ urlpatterns = [
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/change-password/', views.ChangePasswordView.as_view(), name='change_password'),
 
+    # US-065 : Vérification email
+    path('auth/verify-email/<uuid:token>/', views.VerifyEmailView.as_view(), name='verify_email'),
+    path('auth/resend-verification/', views.ResendVerificationView.as_view(), name='resend_verification'),
+
     # Profil utilisateur
     path('users/me/', views.MeView.as_view(), name='me'),
     path('users/me/profile/', views.UpdateProfileView.as_view(), name='update_profile'),
     path('users/me/picture/', views.UploadProfilePictureView.as_view(), name='upload_picture'),
+
+    # Badges, réputation, recommandations (US-035/039/040)
+    path('users/badges/', views.BadgesView.as_view(), name='badges'),
+    path('users/reputation/<int:pk>/', views.ReputationView.as_view(), name='reputation'),
+    path('users/recommendations/', views.RecommendationsView.as_view(), name='recommendations'),
+
+    # RGPD (US-059/060)
+    path('users/export-data/', views.ExportDataView.as_view(), name='export-data'),
+    path('users/delete-account/', views.DeleteAccountView.as_view(), name='delete-account'),
 ]

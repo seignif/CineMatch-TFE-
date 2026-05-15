@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     'apps.films',
     'apps.matching',
     'apps.chat',
+    'apps.social',
 ]
 
 MIDDLEWARE = [
@@ -183,6 +184,19 @@ CACHES = {
         'TIMEOUT': 86400,  # 24h
     }
 }
+
+# Email — Resend SMTP (US-065)
+EMAIL_BACKEND = config(
+    'EMAIL_BACKEND',
+    default='django.core.mail.backends.console.EmailBackend'
+)
+EMAIL_HOST = config('EMAIL_HOST', default='smtp.resend.com')
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='resend')
+EMAIL_HOST_PASSWORD = config('RESEND_API_KEY', default='')
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='onboarding@resend.dev')
+FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
 
 # APIs externes
 TMDB_API_KEY = config('TMDB_API_KEY', default='')

@@ -110,3 +110,93 @@ class ChatConsumer(AsyncWebsocketConsumer):
             conversation_id=conversation_id,
             is_read=False
         ).exclude(sender=user).update(is_read=True)
+
+
+class GroupChatConsumer(AsyncWebsocketConsumer):
+    """
+    US-042 : Chat de groupe temps réel.
+    URL: ws://localhost:8000/ws/group/<group_id>/?token=JWT
+    Seuls les membres status='accepted' peuvent se connecter.
+    """
+
+    async def connect(self):
+        self.group_id = self.scope['url_route']['kwargs']['group_id']
+        self.room_group_name = f'group_{self.group_id}'
+        user = self.scope.get('user')
+
+        if not user or not user.is_authenticated:
+            await self.close()
+            return
+
+        if not await self.check_membership(user, self.group_id):
+            await self.close()
+            return
+
+        await self.channel_layer.group_add(self.room_group_name, self.channel_name)
+        await self.accept()
+
+        messages = await self.get_recent_messages(self.group_id)
+        await self.send(text_data=json.dumps({'type': 'history', 'messages': messages}))
+
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard(self.room_group_name, self.channel_name)
+
+    async def receive(self, text_data):
+        try:
+            data = json.loads(text_data)
+        except json.JSONDecodeError:
+            return
+
+        if data.get('type') == 'message':
+            content = data.get('content', '').strip()
+            if not content:
+                return
+            user = self.scope['user']
+            message = await self.save_message(user, self.group_id, content)
+            await self.channel_layer.group_send(
+                self.room_group_name,
+                {'type': 'group_message', 'message': message},
+            )
+
+    async def group_message(self, event):
+        await self.send(text_data=json.dumps({'type': 'message', 'message': event['message']}))
+
+    @database_sync_to_async
+    def check_membership(self, user, group_id):
+        from apps.matching.models import GroupMember
+        return GroupMember.objects.filter(group_id=group_id, user=user, status='accepted').exists()
+
+    @database_sync_to_async
+    def save_message(self, user, group_id, content):
+        from apps.matching.models import Group, GroupMessage
+        group = Group.objects.get(id=group_id)
+        msg = GroupMessage.objects.create(group=group, sender=user, content=content)
+        group.save(update_fields=['updated_at'])
+        return {
+            'id': msg.id,
+            'sender_id': user.id,
+            'sender_name': user.first_name,
+            'content': msg.content,
+            'is_system': msg.is_system,
+            'created_at': msg.created_at.isoformat(),
+        }
+
+    @database_sync_to_async
+    def get_recent_messages(self, group_id, limit=50):
+        from apps.matching.models import GroupMessage
+        msgs = (
+            GroupMessage.objects.filter(group_id=group_id)
+            .select_related('sender')
+            .order_by('-created_at')[:limit]
+        )
+        return [
+            {
+                'id': m.id,
+                'sender_id': m.sender.id,
+                'sender_name': m.sender.first_name,
+                'content': m.content,
+                'is_system': m.is_system,
+                'created_at': m.created_at.isoformat(),
+            }
+            for m in reversed(list(msgs))
+        ]

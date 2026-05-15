@@ -54,7 +54,7 @@ export default function Login() {
           </div>
 
           <h2 className="text-2xl font-semibold text-white mb-2">Connexion</h2>
-          <p className="text-[var(--text-muted)] text-sm mb-8">Heureux de te revoir 👋</p>
+          <p className="text-[var(--text-muted)] text-sm mb-8">Heureux de te revoir</p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>

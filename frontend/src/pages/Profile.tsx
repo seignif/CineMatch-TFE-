@@ -1,7 +1,17 @@
 import { useState, useEffect, useRef } from 'react'
-import { Camera, Save, Eye, User, MapPin } from 'lucide-react'
+import { Camera, Save, Eye, User, MapPin, Search, X, Award, Navigation, Settings } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
-import { usersApi } from '../services/api'
+import { usersApi, filmsApi, badgesApi, authApi } from '../services/api'
+import type { Film, Badge, ReputationScore } from '../types'
+import { mediaUrl } from '../utils/media'
+import { BadgesGrid } from '../components/BadgeDisplay'
+
+const LANG_OPTIONS = [
+  { value: 'vf', label: 'VF', desc: 'Version Française' },
+  { value: 'vo', label: 'VO', desc: 'Version Originale' },
+  { value: 'both', label: 'Les deux', desc: 'Peu importe' },
+]
 
 const MOOD_OPTIONS = [
   { value: 'rire', label: 'Envie de rire' },
@@ -15,10 +25,11 @@ const GENRE_OPTIONS = [
   'Science-fiction', 'Animation', 'Documentaire', 'Romance', 'Aventure',
 ]
 
-type Tab = 'infos' | 'preferences' | 'public'
+type Tab = 'infos' | 'preferences' | 'public' | 'badges' | 'parametres'
 
 export default function Profile() {
-  const { user, fetchMe } = useAuthStore()
+  const { user, fetchMe, logout } = useAuthStore()
+  const navigate = useNavigate()
   const fileRef = useRef<HTMLInputElement>(null)
   const [tab, setTab] = useState<Tab>('infos')
   const [loading, setLoading] = useState(false)
@@ -27,23 +38,85 @@ export default function Profile() {
   // Form state
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
+  const [username, setUsername] = useState('')
   const [city, setCity] = useState('')
   const [dateOfBirth, setDateOfBirth] = useState('')
   const [bio, setBio] = useState('')
   const [mood, setMood] = useState('')
   const [genrePrefs, setGenrePrefs] = useState<Record<string, number>>({})
 
+  // Films signature
+  const [filmsSignature, setFilmsSignature] = useState<Film[]>([])
+  const [filmQuery, setFilmQuery] = useState('')
+  const [filmResults, setFilmResults] = useState<Film[]>([])
+  const [searchingFilms, setSearchingFilms] = useState(false)
+
+  // US-062 : Langue + géolocalisation
+  const [langPref, setLangPref] = useState<string>('both')
+  const [latitude, setLatitude] = useState<number | null>(null)
+  const [longitude, setLongitude] = useState<number | null>(null)
+  const [searchRadius, setSearchRadius] = useState<number>(15)
+  const [geoLoading, setGeoLoading] = useState(false)
+
+  // Badges & réputation
+  const [badges, setBadges] = useState<Badge[]>([])
+  const [reputation, setReputation] = useState<ReputationScore | null>(null)
+
+  // Suppression de compte
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteError, setDeleteError] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [exportLoading, setExportLoading] = useState(false)
+
   useEffect(() => {
     if (user) {
       setFirstName(user.first_name)
       setLastName(user.last_name)
+      setUsername(user.username || '')
       setCity(user.city || '')
       setDateOfBirth(user.date_of_birth || '')
       setBio(user.profile?.bio || '')
       setMood(user.profile?.mood || '')
-      setGenrePrefs(user.profile?.genre_preferences || {})
+      const rawPrefs = user.profile?.genre_preferences || {}
+      setGenrePrefs(Object.fromEntries(
+        Object.entries(rawPrefs).map(([k, v]) => [k, Math.min(v as number, 5)])
+      ))
+      setFilmsSignature(user.profile?.films_signature || [])
+      setLangPref(user.profile?.language_preference || 'both')
+      setLatitude(user.profile?.latitude != null ? Number(user.profile.latitude) : null)
+      setLongitude(user.profile?.longitude != null ? Number(user.profile.longitude) : null)
+      setSearchRadius(user.profile?.search_radius_km ?? 15)
     }
   }, [user])
+
+  // Fetch badges quand on ouvre l'onglet
+  useEffect(() => {
+    if (tab === 'badges' && user) {
+      badgesApi.getMyBadges().then(res => setBadges(res.data.badges)).catch(() => {})
+      badgesApi.getReputation(user.id).then(res => setReputation(res.data)).catch(() => {})
+    }
+  }, [tab, user])
+
+  // Recherche TMDb debounced — ref pour ignorer les résultats obsolètes
+  const latestFilmQuery = useRef('')
+  useEffect(() => {
+    if (!filmQuery.trim()) { setFilmResults([]); return }
+    latestFilmQuery.current = filmQuery
+    const controller = new AbortController()
+    const t = setTimeout(async () => {
+      setSearchingFilms(true)
+      try {
+        const res = await filmsApi.tmdbSearch(filmQuery, controller.signal)
+        if (latestFilmQuery.current === filmQuery) setFilmResults(res.data)
+      } catch {
+        // requête annulée ou erreur réseau
+      } finally {
+        if (latestFilmQuery.current === filmQuery) setSearchingFilms(false)
+      }
+    }, 600)
+    return () => { clearTimeout(t); controller.abort() }
+  }, [filmQuery])
 
   const showSuccess = (msg: string) => {
     setSuccess(msg)
@@ -54,7 +127,7 @@ export default function Profile() {
     e.preventDefault()
     setLoading(true)
     try {
-      await usersApi.updateMe({ first_name: firstName, last_name: lastName, city, date_of_birth: dateOfBirth || null })
+      await usersApi.updateMe({ first_name: firstName, last_name: lastName, username, city, date_of_birth: dateOfBirth || null })
       await fetchMe()
       showSuccess('Informations mises à jour !')
     } finally {
@@ -66,11 +139,46 @@ export default function Profile() {
     e.preventDefault()
     setLoading(true)
     try {
-      await usersApi.updateProfile({ bio, mood, genre_preferences: genrePrefs })
+      await usersApi.updateProfile({
+        bio, mood, genre_preferences: genrePrefs,
+        films_signature_ids: filmsSignature.map(f => f.id),
+        language_preference: langPref,
+        latitude,
+        longitude,
+        search_radius_km: searchRadius,
+      })
       await fetchMe()
       showSuccess('Profil mis à jour !')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      alert('Géolocalisation non supportée par votre navigateur.')
+      return
+    }
+    setGeoLoading(true)
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setLatitude(pos.coords.latitude)
+        setLongitude(pos.coords.longitude)
+        setGeoLoading(false)
+      },
+      () => {
+        alert("Impossible d'obtenir votre position.")
+        setGeoLoading(false)
+      }
+    )
+  }
+
+  const handleResendVerification = async () => {
+    try {
+      await authApi.resendVerification()
+      showSuccess('Email de vérification renvoyé !')
+    } catch {
+      // silencieux
     }
   }
 
@@ -94,8 +202,50 @@ export default function Profile() {
         delete next[genre]
         return next
       }
-      return { ...prev, [genre]: 7 }
+      return { ...prev, [genre]: 3 }
     })
+  }
+
+  const setGenreRating = (genre: string, value: number) => {
+    setGenrePrefs(prev => ({ ...prev, [genre]: value }))
+  }
+
+  const handleExportData = async () => {
+    setExportLoading(true)
+    try {
+      const token = localStorage.getItem('access_token')
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || '/api'}/users/export-data/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `cinematch_data_${new Date().toISOString().split('T')[0]}.json`
+      a.click()
+      window.URL.revokeObjectURL(url)
+      showSuccess('Export téléchargé ! Un email de confirmation vous a été envoyé.')
+    } catch {
+      showSuccess('Erreur lors de l\'export.')
+    } finally {
+      setExportLoading(false)
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    if (!deletePassword) return
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      await usersApi.deleteAccount(deletePassword)
+      logout()
+      navigate('/')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+      setDeleteError(msg || 'Erreur lors de la suppression.')
+    } finally {
+      setDeleting(false)
+    }
   }
 
   if (!user) return null
@@ -109,7 +259,7 @@ export default function Profile() {
           <div className="w-24 h-24 rounded-full overflow-hidden border-2"
             style={{ borderColor: 'var(--accent-red)' }}>
             {user.profile?.profile_picture ? (
-              <img src={user.profile.profile_picture} alt="Avatar" className="w-full h-full object-cover" />
+              <img src={mediaUrl(user.profile.profile_picture)!} alt="Avatar" className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center text-3xl font-bold"
                 style={{ background: 'var(--bg-card)', color: 'var(--accent-red)' }}>
@@ -129,10 +279,24 @@ export default function Profile() {
 
         <div>
           <h1 className="text-2xl font-semibold text-white">{user.first_name} {user.last_name}</h1>
+          <p className="text-[var(--text-muted)] text-sm">@{user.username}</p>
           <p className="text-[var(--text-muted)] text-sm">{user.email}</p>
           {user.city && <p className="text-[var(--text-muted)] text-sm flex items-center gap-1"><MapPin size={12} />{user.city}</p>}
         </div>
       </div>
+
+      {/* Email non vérifié */}
+      {!user.is_email_verified && (
+        <div className="mb-4 px-4 py-3 rounded-lg flex items-center justify-between gap-3 text-sm"
+          style={{ background: 'rgba(255,193,7,0.1)', border: '1px solid rgba(255,193,7,0.25)' }}>
+          <span style={{ color: '#fbbf24' }}>Email non vérifié — certaines fonctionnalités sont limitées.</span>
+          <button onClick={handleResendVerification}
+            className="shrink-0 text-xs px-3 py-1 rounded-md font-medium transition-colors"
+            style={{ background: 'rgba(255,193,7,0.2)', color: '#fbbf24' }}>
+            Renvoyer l'email
+          </button>
+        </div>
+      )}
 
       {/* Success message */}
       {success && (
@@ -144,14 +308,16 @@ export default function Profile() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 glass rounded-lg p-1 mb-6">
+      <div className="flex gap-1 glass rounded-lg p-1 mb-6 flex-wrap">
         {([
           { id: 'infos', label: 'Mes infos', icon: User },
           { id: 'preferences', label: 'Préférences', icon: Save },
           { id: 'public', label: 'Profil public', icon: Eye },
+          { id: 'badges', label: 'Badges', icon: Award },
+          { id: 'parametres', label: 'Paramètres', icon: Settings },
         ] as { id: Tab; label: string; icon: typeof User }[]).map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setTab(id)}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
               tab === id ? 'bg-[var(--accent-red)] text-white' : 'text-[var(--text-muted)] hover:text-white'
             }`}>
             <Icon size={14} />
@@ -174,6 +340,11 @@ export default function Profile() {
               <input value={lastName} onChange={e => setLastName(e.target.value)}
                 className="input-field" required />
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-[var(--text-muted)] mb-1.5">Nom d'utilisateur</label>
+            <input value={username} onChange={e => setUsername(e.target.value)}
+              placeholder="@monpseudo" className="input-field" required minLength={3} maxLength={150} />
           </div>
           <div>
             <label className="block text-sm font-medium text-[var(--text-muted)] mb-1.5">Email</label>
@@ -239,6 +410,60 @@ export default function Profile() {
             </div>
           </div>
 
+          {/* Langue préférée */}
+          <div className="glass rounded-2xl p-6">
+            <label className="block text-sm font-medium text-white mb-3">Langue préférée</label>
+            <div className="grid grid-cols-3 gap-2">
+              {LANG_OPTIONS.map(opt => (
+                <button key={opt.value} type="button" onClick={() => setLangPref(opt.value)}
+                  className={`px-3 py-3 rounded-xl text-center transition-all ${
+                    langPref === opt.value ? 'text-white' : 'text-[var(--text-muted)] hover:text-white'
+                  }`}
+                  style={{
+                    background: langPref === opt.value ? 'rgba(230,57,70,0.15)' : 'rgba(255,255,255,0.03)',
+                    border: `1px solid ${langPref === opt.value ? 'rgba(230,57,70,0.4)' : 'rgba(255,255,255,0.05)'}`,
+                  }}>
+                  <div className="font-semibold text-sm">{opt.label}</div>
+                  <div className="text-xs mt-0.5 text-[var(--text-muted)]">{opt.desc}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Géolocalisation */}
+          <div className="glass rounded-2xl p-6 space-y-4">
+            <label className="block text-sm font-medium text-white">Ma position</label>
+            <div className="flex items-center gap-3">
+              {latitude && longitude ? (
+                <span className="text-sm" style={{ color: '#4ade80' }}>
+                  Position enregistrée ({latitude.toFixed(4)}, {longitude.toFixed(4)})
+                </span>
+              ) : (
+                <span className="text-sm text-[var(--text-muted)]">Position non renseignée</span>
+              )}
+              <button type="button" onClick={handleGetLocation} disabled={geoLoading}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors btn-secondary disabled:opacity-60">
+                {geoLoading
+                  ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  : <Navigation size={14} />
+                }
+                Utiliser ma position
+              </button>
+            </div>
+            <div>
+              <div className="flex justify-between text-xs text-[var(--text-muted)] mb-2">
+                <span>Rayon de recherche</span>
+                <span className="font-medium text-white">{searchRadius} km</span>
+              </div>
+              <input type="range" min={5} max={300} step={5} value={searchRadius}
+                onChange={e => setSearchRadius(Number(e.target.value))}
+                className="w-full accent-[var(--accent-red)]" />
+              <div className="flex justify-between text-xs text-[var(--text-muted)] mt-1">
+                <span>5 km</span><span>75 km</span><span>150 km</span><span>300 km</span>
+              </div>
+            </div>
+          </div>
+
           {/* Genres */}
           <div className="glass rounded-2xl p-6">
             <label className="block text-sm font-medium text-white mb-3">
@@ -268,6 +493,89 @@ export default function Profile() {
                 )
               })}
             </div>
+
+            {Object.keys(genrePrefs).length > 0 && (
+              <div className="mt-4 space-y-2.5">
+                <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-3">Intensité par genre</p>
+                {Object.entries(genrePrefs).map(([genre, rating]) => (
+                  <div key={genre} className="flex items-center gap-3">
+                    <span className="text-sm text-white w-28 shrink-0 truncate">{genre}</span>
+                    <div className="flex gap-1.5">
+                      {[1, 2, 3, 4, 5].map(v => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => setGenreRating(genre, v)}
+                          className="w-5 h-5 rounded-full transition-all hover:scale-110"
+                          style={{
+                            background: v <= rating ? 'var(--accent-red)' : 'rgba(255,255,255,0.12)',
+                            border: v <= rating ? '1px solid var(--accent-red)' : '1px solid rgba(255,255,255,0.2)',
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-xs text-[var(--text-muted)] w-6 text-right">{rating}/5</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Films signature */}
+          <div className="glass rounded-2xl p-6">
+            <label className="block text-sm font-medium text-white mb-1">
+              Films signature
+              <span className="text-[var(--text-muted)] font-normal ml-2 text-xs">
+                ({filmsSignature.length}/5) — utilisés pour le matching
+              </span>
+            </label>
+            <p className="text-xs text-[var(--text-muted)] mb-3">Tes films préférés de tous les temps, pas forcément au cinéma.</p>
+            {filmsSignature.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                {filmsSignature.map(f => (
+                  <span key={f.id} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm text-white"
+                    style={{ background: 'var(--accent-red)', border: '1px solid transparent' }}>
+                    {f.title}
+                    <button type="button" onClick={() => setFilmsSignature(prev => prev.filter(x => x.id !== f.id))}>
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+            {filmsSignature.length < 5 && (
+              <div className="relative">
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+                  <input type="text" value={filmQuery} onChange={e => setFilmQuery(e.target.value)}
+                    placeholder="Rechercher un film (ex: Interstellar)..." className="input-field pl-9" />
+                  {searchingFilms && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  )}
+                </div>
+                {filmResults.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 rounded-xl overflow-hidden shadow-xl"
+                    style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    {filmResults.map(f => (
+                      <button key={f.id} type="button"
+                        onClick={() => {
+                          if (!filmsSignature.find(x => x.id === f.id))
+                            setFilmsSignature(prev => [...prev, f])
+                          setFilmQuery(''); setFilmResults([])
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-white/5 transition-colors text-left">
+                        {f.poster_url
+                          ? <img src={f.poster_url} alt={f.title} className="w-8 h-12 object-cover rounded" />
+                          : <div className="w-8 h-12 rounded flex items-center justify-center text-xs text-[var(--text-muted)]"
+                              style={{ background: 'rgba(255,255,255,0.05)' }}>?</div>
+                        }
+                        <span className="text-sm text-white">{f.title}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           <button type="submit" disabled={loading}
@@ -285,7 +593,7 @@ export default function Profile() {
             <div className="w-16 h-16 rounded-full overflow-hidden border-2"
               style={{ borderColor: 'var(--accent-red)' }}>
               {user.profile?.profile_picture ? (
-                <img src={user.profile.profile_picture} alt="Avatar" className="w-full h-full object-cover" />
+                <img src={mediaUrl(user.profile.profile_picture)!} alt="Avatar" className="w-full h-full object-cover" />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-2xl font-bold"
                   style={{ background: 'var(--bg-card)', color: 'var(--accent-red)' }}>
@@ -326,9 +634,177 @@ export default function Profile() {
             </div>
           )}
 
+          {filmsSignature.length > 0 && (
+            <div className="mb-4">
+              <p className="text-xs font-medium text-[var(--text-muted)] uppercase tracking-wider mb-2">Films signature</p>
+              <div className="flex flex-wrap gap-2">
+                {filmsSignature.map(f => (
+                  <div key={f.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
+                    style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                    {f.poster_url
+                      ? <img src={f.poster_url} alt={f.title} className="w-6 h-9 object-cover rounded" />
+                      : <div className="w-6 h-9 rounded flex items-center justify-center text-[10px]"
+                          style={{ background: 'rgba(255,255,255,0.05)' }}>?</div>
+                    }
+                    <span className="text-xs text-white">{f.title}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <p className="text-xs text-[var(--text-muted)] italic">
             C'est ainsi que les autres utilisateurs voient ton profil. Email et mot de passe ne sont jamais affichés.
           </p>
+        </div>
+      )}
+
+      {/* Tab: Paramètres */}
+      {tab === 'parametres' && (
+        <div className="space-y-6">
+          {/* Export RGPD */}
+          <div className="glass rounded-2xl p-6">
+            <h3 className="text-sm font-medium text-white uppercase tracking-wider mb-1">Mes données (RGPD)</h3>
+            <p className="text-[var(--text-muted)] text-sm mb-4 leading-relaxed">
+              Conformément au RGPD, vous avez le droit d'accéder à toutes vos données et de les télécharger.
+              L'export inclut : profil, matchs, messages, sorties, avis, posts et journal.
+            </p>
+            <button
+              onClick={handleExportData}
+              disabled={exportLoading}
+              className="btn-secondary flex items-center gap-2 disabled:opacity-60"
+            >
+              {exportLoading
+                ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                : null}
+              Exporter mes données
+            </button>
+          </div>
+
+          {/* Liens légaux */}
+          <div className="glass rounded-2xl p-6">
+            <h3 className="text-sm font-medium text-white uppercase tracking-wider mb-3">Informations légales</h3>
+            <div className="flex flex-col gap-2">
+              <a href="/cgu" target="_blank" rel="noopener noreferrer"
+                className="text-sm hover:text-white transition-colors underline"
+                style={{ color: 'var(--accent-red)' }}>
+                Conditions Générales d'Utilisation
+              </a>
+              <a href="/cgu#confidentialite" target="_blank" rel="noopener noreferrer"
+                className="text-sm hover:text-white transition-colors underline"
+                style={{ color: 'var(--accent-red)' }}>
+                Politique de confidentialité
+              </a>
+            </div>
+          </div>
+
+          {/* Zone de danger */}
+          <div className="rounded-2xl p-6 space-y-3"
+            style={{ background: 'rgba(230,57,70,0.05)', border: '1px solid rgba(230,57,70,0.2)' }}>
+            <h3 className="text-sm font-medium uppercase tracking-wider" style={{ color: 'var(--accent-red)' }}>
+              Zone de danger
+            </h3>
+            <p className="text-[var(--text-muted)] text-sm leading-relaxed">
+              La suppression de votre compte est irréversible. Vos données personnelles seront effacées
+              définitivement dans 30 jours. Vos messages et posts resteront visibles de façon anonyme.
+            </p>
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              style={{ background: 'rgba(230,57,70,0.15)', color: 'var(--accent-red)', border: '1px solid rgba(230,57,70,0.3)' }}
+            >
+              Supprimer mon compte
+            </button>
+          </div>
+
+          {/* Modal suppression */}
+          {showDeleteModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              style={{ background: 'rgba(0,0,0,0.7)' }}
+              onClick={() => setShowDeleteModal(false)}>
+              <div className="w-full max-w-md rounded-2xl p-6 space-y-4"
+                style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.08)' }}
+                onClick={e => e.stopPropagation()}>
+                <h3 className="text-white font-semibold text-lg">Supprimer mon compte</h3>
+                <div className="rounded-xl p-4 text-sm space-y-1"
+                  style={{ background: 'rgba(230,57,70,0.08)', border: '1px solid rgba(230,57,70,0.2)' }}>
+                  <p className="font-medium" style={{ color: 'var(--accent-red)' }}>Cette action est irréversible.</p>
+                  <p className="text-[var(--text-muted)]">Vos données personnelles seront supprimées dans 30 jours.</p>
+                  <p className="text-[var(--text-muted)]">Vos messages et posts resteront visibles de façon anonyme.</p>
+                </div>
+                <div>
+                  <label className="block text-sm text-[var(--text-muted)] mb-1.5">Confirmez avec votre mot de passe</label>
+                  <input
+                    type="password"
+                    value={deletePassword}
+                    onChange={e => setDeletePassword(e.target.value)}
+                    placeholder="Votre mot de passe"
+                    className="input-field"
+                  />
+                  {deleteError && <p className="text-xs mt-1" style={{ color: 'var(--accent-red)' }}>{deleteError}</p>}
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setShowDeleteModal(false)} className="flex-1 btn-secondary text-sm">
+                    Annuler
+                  </button>
+                  <button
+                    onClick={handleDeleteAccount}
+                    disabled={!deletePassword || deleting}
+                    className="flex-1 py-2 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-40"
+                    style={{ background: 'var(--accent-red)' }}
+                  >
+                    {deleting ? 'Suppression...' : 'Supprimer définitivement'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Badges */}
+      {tab === 'badges' && (
+        <div className="space-y-6">
+          {/* Score de réputation */}
+          {reputation && (
+            <div className="glass rounded-2xl p-6">
+              <h3 className="text-sm font-medium text-white mb-4 uppercase tracking-wider">Score de réputation</h3>
+              {reputation.count >= 3 ? (
+                <div className="flex items-center gap-6">
+                  <div className="text-center">
+                    <p className="text-4xl font-bold" style={{ color: 'var(--accent-gold)' }}>
+                      {reputation.score}
+                    </p>
+                    <p className="text-xs text-[var(--text-muted)] mt-1">/ 5</p>
+                  </div>
+                  <div>
+                    <p className="text-white font-semibold">{reputation.label}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{reputation.count} avis reçus</p>
+                    {reputation.would_go_again_pct !== null && (
+                      <p className="text-xs mt-1" style={{ color: 'var(--accent-gold)' }}>
+                        {reputation.would_go_again_pct}% repartiraient avec toi
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl font-bold text-[var(--text-muted)]">Nouveau</span>
+                  <p className="text-xs text-[var(--text-muted)]">
+                    {reputation.count > 0
+                      ? `${reputation.count} avis — encore ${3 - reputation.count} pour afficher ton score`
+                      : 'Aucun avis reçu pour l\'instant'}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Grille de badges */}
+          <div className="glass rounded-2xl p-6">
+            <h3 className="text-sm font-medium text-white mb-6 uppercase tracking-wider">Mes badges</h3>
+            <BadgesGrid badges={badges} />
+          </div>
         </div>
       )}
     </div>

@@ -1,0 +1,15 @@
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="60" cy="60" r="58" fill="#0A0A0F"/>
+  <circle cx="60" cy="60" r="54" fill="none" stroke="#FFD700" stroke-width="3"/>
+  <circle cx="60" cy="60" r="51" fill="none" stroke="#FFD700" stroke-width="0.5"/>
+  <rect x="48" y="85" width="24" height="6" rx="2" fill="#FFD700"/>
+  <rect x="44" y="89" width="32" height="4" rx="2" fill="#FFD700"/>
+  <rect x="57" y="75" width="6" height="12" fill="#FFD700"/>
+  <ellipse cx="60" cy="60" rx="14" ry="18" fill="#FFD700"/>
+  <ellipse cx="60" cy="60" rx="10" ry="14" fill="#B8860B"/>
+  <circle cx="60" cy="38" r="8" fill="#FFD700"/>
+  <path d="M 46 55 Q 40 50 42 42 Q 46 36 52 40" fill="none" stroke="#FFD700" stroke-width="4" stroke-linecap="round"/>
+  <path d="M 74 55 Q 80 50 78 42 Q 74 36 68 40" fill="none" stroke="#FFD700" stroke-width="4" stroke-linecap="round"/>
+  <text x="60" y="14" text-anchor="middle" fill="#FFD700" font-size="6">✦ ✦ ✦ ✦ ✦</text>
+  <text x="60" y="108" text-anchor="middle" fill="#FFD700" font-size="7.5" font-family="Arial, sans-serif" font-weight="bold" letter-spacing="2">PALME D'OR</text>
+</svg>

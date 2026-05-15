@@ -29,6 +29,7 @@ export interface User {
   last_name: string
   city: string
   date_of_birth?: string
+  is_email_verified: boolean
   profile: UserProfile
 }
 
@@ -40,9 +41,28 @@ export interface UserProfile {
   films_signature: Film[]
   badges: string[]
   stats: Record<string, number>
+  language_preference: 'vf' | 'vo' | 'both'
+  latitude: number | null
+  longitude: number | null
+  search_radius_km: number
 }
 
 // ---- Films ----
+export interface CastMember {
+  name: string
+  character: string
+  profile_path: string
+  profile_url: string
+  order: number
+}
+
+export interface CrewMember {
+  name: string
+  job: string
+  profile_path: string
+  profile_url: string
+}
+
 export interface Genre {
   id: number
   name: string
@@ -64,6 +84,10 @@ export interface Film {
   trailer_youtube_key: string
   tmdb_rating: number | null
   imdb_code: string
+  is_special_event: boolean
+  min_age: number | null
+  cast: CastMember[]
+  crew: CrewMember[]
   genres: Genre[]
   seances?: Seance[]
 }
@@ -100,6 +124,7 @@ export interface CandidateProfile {
   profile_picture: string | null
   mood: string
   genre_preferences: Record<string, number>
+  films_signature: { id: number; title: string; poster_url: string }[]
 }
 
 export interface Candidate {
@@ -110,6 +135,8 @@ export interface Candidate {
   profile: CandidateProfile
   score: number
   reasons: string[]
+  superliked_me: boolean
+  distance_km: number | null
 }
 
 export interface Match {
@@ -126,6 +153,123 @@ export interface Match {
   ai_match_message: string
   status: 'active' | 'blocked' | 'expired'
   created_at: string
+}
+
+// ---- Outings ----
+export interface OutingSeance {
+  id: number
+  film_title: string
+  film_poster: string
+  cinema_name: string
+  cinema_kinepolis_id: string
+  showtime: string
+  language: string
+  hall: number | null
+  booking_url: string
+  is_sold_out: boolean
+  raw_attributes: string
+}
+
+export interface OutingUserInfo {
+  id: number
+  first_name: string
+  profile_picture: string | null
+}
+
+export interface PlannedOuting {
+  id: number
+  match: number
+  status: 'proposed' | 'confirmed' | 'completed' | 'cancelled'
+  seance: OutingSeance | null
+  seance_id?: number | null
+  proposer_info: OutingUserInfo
+  partner_info: OutingUserInfo
+  meeting_place: string
+  meeting_time: string | null
+  proposer_booked: boolean
+  partner_booked: boolean
+  proposal_message: string
+  is_upcoming: boolean
+  user_is_proposer: boolean
+  created_at: string
+  updated_at: string
+}
+
+// ---- Badges & Réputation (US-039/040) ----
+export interface Badge {
+  id: string
+  name: string
+  description: string
+  svg_id: string
+  color_primary: string
+  color_secondary: string
+  tier: 'bronze' | 'silver' | 'gold'
+  earned: boolean
+}
+
+export interface ReputationScore {
+  score: number | null
+  count: number
+  label: string
+  would_go_again_pct: number | null
+}
+
+// ---- Recommandations (US-035) ----
+export interface FilmRecommendation {
+  film: import('./index').Film
+  score: number
+  reasons: string[]
+}
+
+// ---- Groupes (US-041/042/043) ----
+export interface GroupMemberInfo {
+  id: number
+  user_info: {
+    id: number
+    first_name: string
+    city: string
+    profile_picture: string | null
+  }
+  role: 'admin' | 'member'
+  status: 'pending' | 'accepted' | 'declined'
+  joined_at: string
+}
+
+export interface GroupMessage {
+  id: number
+  sender_id: number
+  sender_name: string
+  content: string
+  is_system: boolean
+  created_at: string
+}
+
+export interface VoteSummary {
+  film: { id: number; title: string; poster_url: string }
+  up: number
+  down: number
+}
+
+export interface Group {
+  id: number
+  name: string
+  status: 'active' | 'archived'
+  creator: number
+  members_info: GroupMemberInfo[]
+  active_member_count: number
+  last_message: {
+    content: string
+    sender_name: string
+    created_at: string
+    is_system: boolean
+  } | null
+  votes_summary: VoteSummary[]
+  chosen_film_info: { id: number; title: string; poster_url: string } | null
+  is_creator: boolean
+  my_invitation_status: 'pending' | 'accepted' | 'declined' | null
+  my_votes: Record<string, 'up' | 'down'>
+  created_at: string
+  updated_at: string
 }
 
 // ---- Chat ----
@@ -154,6 +298,76 @@ export interface Conversation {
   unread_count: number
   match_score: number
   updated_at: string
+}
+
+// ---- Journal (US-063) ----
+export interface WatchedFilm {
+  id: number
+  film_id?: number
+  film_info?: Film
+  watched_date: string | null
+  rating: number | null
+  review: string
+  is_public: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface PublicReview {
+  id: number
+  author_name: string
+  author_picture: string | null
+  rating: number
+  review: string
+  watched_date: string | null
+  created_at: string
+}
+
+export interface JournalStats {
+  total_watched: number
+  average_rating: number | null
+  top_genre: string | null
+}
+
+// ---- L'Entracte — Réseau social (US-067 à US-072) ----
+export interface PostComment {
+  id: number
+  author_id: number
+  author_name: string
+  author_picture: string | null
+  content: string
+  created_at: string
+}
+
+export interface Post {
+  id: number
+  author_id: number
+  author_name: string
+  author_picture: string | null
+  content: string
+  film_info: {
+    id: number
+    title: string
+    poster_url: string
+    kinepolis_id: string
+  } | null
+  like_count: number
+  comment_count: number
+  is_liked: boolean
+  is_author: boolean
+  preview_comments: PostComment[]
+  created_at: string
+}
+
+export interface SocialNotification {
+  id: number
+  type: 'like_post' | 'comment_post' | 'new_match' | 'group_invitation' | 'outing_confirmed'
+  message: string
+  triggered_by_name: string | null
+  triggered_by_picture: string | null
+  post_preview: { id: number; content: string } | null
+  is_read: boolean
+  created_at: string
 }
 
 // ---- API ----

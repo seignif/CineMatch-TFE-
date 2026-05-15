@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Clock, Star, Play, Calendar, X } from 'lucide-react'
-import { filmsApi } from '../services/api'
+import { ArrowLeft, Clock, Star, Play, Calendar, X, Eye } from 'lucide-react'
+import { filmsApi, watchedApi, socialApi } from '../services/api'
+import { useAuthStore } from '../store/authStore'
 import SeanceCard from '../components/SeanceCard'
-import type { Film, Seance } from '../types'
+import { PostCard } from '../components/PostCard'
+import { CreatePostModal } from '../components/CreatePostModal'
+import type { Film, Seance, PublicReview, WatchedFilm, Post } from '../types'
+import { FilmCast } from '../components/FilmCast'
 
 function formatDuration(minutes: number | null) {
   if (!minutes) return null
@@ -44,24 +48,96 @@ function TrailerModal({ youtubeKey, onClose }: { youtubeKey: string; onClose: ()
 export default function FilmDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const { user } = useAuthStore()
   const [film, setFilm] = useState<Film | null>(null)
   const [seances, setSeances] = useState<Seance[]>([])
   const [loading, setLoading] = useState(true)
   const [showTrailer, setShowTrailer] = useState(false)
   const [selectedCinema, setSelectedCinema] = useState<string>('all')
+  const [langFilter, setLangFilter] = useState<string>('')
+
+  // Journal (US-063)
+  const [showWatchedModal, setShowWatchedModal] = useState(false)
+  const [myEntry, setMyEntry] = useState<WatchedFilm | null>(null)
+  const [watchRating, setWatchRating] = useState(0)
+  const [watchReview, setWatchReview] = useState('')
+  const [watchDate, setWatchDate] = useState('')
+  const [watchPublic, setWatchPublic] = useState(true)
+  const [savingWatch, setSavingWatch] = useState(false)
+
+  // Forum (US-064)
+  const [communityReviews, setCommunityReviews] = useState<PublicReview[]>([])
+
+  // L'Entracte (US-071)
+  const [showCreatePost, setShowCreatePost] = useState(false)
+  const [filmPosts, setFilmPosts] = useState<Post[]>([])
 
   useEffect(() => {
     if (!id) return
     const filmId = parseInt(id)
+    const defaultLang = user?.profile?.language_preference
+    if (defaultLang && defaultLang !== 'both') setLangFilter(defaultLang)
+
     Promise.all([
       filmsApi.getById(filmId),
       filmsApi.getSeances(filmId),
-    ]).then(([filmRes, seancesRes]) => {
+      filmsApi.getReviews(filmId),
+    ]).then(([filmRes, seancesRes, reviewsRes]) => {
       setFilm(filmRes.data)
       setSeances(seancesRes.data)
+      setCommunityReviews(reviewsRes.data.results ?? reviewsRes.data)
     }).catch(() => navigate('/films'))
       .finally(() => setLoading(false))
-  }, [id, navigate])
+
+    // Posts L'Entracte sur ce film
+    socialApi.getPosts({ film_id: filmId }).then(res => {
+      const data = res.data
+      setFilmPosts((data.results ?? data).slice(0, 3))
+    }).catch(() => {})
+
+    // Mon entrée journal
+    watchedApi.getAll().then(res => {
+      const all: WatchedFilm[] = res.data.results ?? res.data
+      const mine = all.find(e => e.film_info?.id === filmId)
+      if (mine) setMyEntry(mine)
+    }).catch(() => {})
+  }, [id, navigate, user])
+
+  const handleSaveWatch = async () => {
+    if (!film || !watchRating) return
+    setSavingWatch(true)
+    try {
+      if (myEntry) {
+        const res = await watchedApi.update(myEntry.id, {
+          rating: watchRating, review: watchReview,
+          watched_date: watchDate || null, is_public: watchPublic,
+        })
+        setMyEntry(res.data)
+      } else {
+        const res = await watchedApi.create({
+          film_id: film.id, rating: watchRating, review: watchReview,
+          watched_date: watchDate || null, is_public: watchPublic,
+        })
+        setMyEntry(res.data)
+      }
+      // Rafraîchir les avis publics
+      const reviewsRes = await filmsApi.getReviews(film.id)
+      setCommunityReviews(reviewsRes.data.results ?? reviewsRes.data)
+      setShowWatchedModal(false)
+    } finally {
+      setSavingWatch(false)
+    }
+  }
+
+  const openWatchModal = () => {
+    if (myEntry) {
+      setWatchRating(myEntry.rating ?? 0)
+      setWatchReview(myEntry.review)
+      setWatchDate(myEntry.watched_date ?? '')
+      setWatchPublic(myEntry.is_public)
+    }
+    setShowWatchedModal(true)
+  }
 
   if (loading) {
     return (
@@ -77,9 +153,16 @@ export default function FilmDetail() {
   if (!film) return null
 
   const cinemas = Array.from(new Set(seances.map(s => s.cinema.name)))
+
+  const langFilteredSeances = langFilter === 'vf'
+    ? seances.filter(s => !s.raw_attributes.toLowerCase().includes('english'))
+    : langFilter === 'vo'
+      ? seances.filter(s => s.raw_attributes.toLowerCase().includes('english'))
+      : seances
+
   const filteredSeances = selectedCinema === 'all'
-    ? seances
-    : seances.filter(s => s.cinema.name === selectedCinema)
+    ? langFilteredSeances
+    : langFilteredSeances.filter(s => s.cinema.name === selectedCinema)
 
   // Group seances by date
   const seancesByDate: Record<string, Seance[]> = {}
@@ -165,15 +248,29 @@ export default function FilmDetail() {
                 )}
               </div>
 
-              {film.trailer_youtube_key && (
-                <button
-                  onClick={() => setShowTrailer(true)}
-                  className="mt-4 flex items-center gap-2 btn-primary"
-                >
-                  <Play size={16} fill="white" />
-                  Bande-annonce
-                </button>
-              )}
+              <div className="flex flex-wrap gap-3 mt-4">
+                {film.trailer_youtube_key && (
+                  <button onClick={() => setShowTrailer(true)} className="flex items-center gap-2 btn-primary">
+                    <Play size={16} fill="white" />
+                    Bande-annonce
+                  </button>
+                )}
+                {user && (
+                  <button onClick={openWatchModal}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors btn-secondary">
+                    <Eye size={15} />
+                    {myEntry ? 'Modifier mon avis' : "J'ai vu ce film"}
+                  </button>
+                )}
+                {user && (
+                  <button
+                    onClick={() => setShowCreatePost(true)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors bg-white/10 hover:bg-white/15 text-white"
+                  >
+                    Partager dans L'Entracte
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -191,9 +288,14 @@ export default function FilmDetail() {
           </div>
         )}
 
+        {/* Acteurs & équipe */}
+        {(film.cast?.length > 0 || film.crew?.length > 0) && (
+          <FilmCast cast={film.cast} crew={film.crew} />
+        )}
+
         {/* Séances */}
         <div>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
             <h2 className="font-display text-2xl tracking-wider text-white">
               SÉANCES DISPONIBLES
               <span className="text-[var(--text-muted)] text-lg ml-3 font-sans font-normal normal-case">
@@ -202,17 +304,32 @@ export default function FilmDetail() {
             </h2>
 
             {cinemas.length > 1 && (
-              <select
-                value={selectedCinema}
-                onChange={e => setSelectedCinema(e.target.value)}
-                className="input-field w-auto text-sm"
-              >
+              <select value={selectedCinema} onChange={e => setSelectedCinema(e.target.value)}
+                className="input-field w-auto text-sm">
                 <option value="all">Tous les cinémas</option>
                 {cinemas.map(c => (
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>
             )}
+          </div>
+
+          {/* Filtre VF/VO */}
+          <div className="flex gap-2 mb-6">
+            {[
+              { value: '', label: 'Toutes' },
+              { value: 'vf', label: 'VF' },
+              { value: 'vo', label: 'VO/VOST' },
+            ].map(opt => (
+              <button key={opt.value} onClick={() => setLangFilter(opt.value)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                  langFilter === opt.value
+                    ? 'bg-[var(--accent-red)] text-white'
+                    : 'glass text-[var(--text-muted)] hover:text-white'
+                }`}>
+                {opt.label}
+              </button>
+            ))}
           </div>
 
           {seances.length === 0 ? (
@@ -241,6 +358,149 @@ export default function FilmDetail() {
           )}
         </div>
       </div>
+
+      {/* Section forum (US-064) */}
+      <div className="max-w-7xl mx-auto px-4 pb-12">
+        <h2 className="font-display text-2xl tracking-wider text-white mb-6">
+          AVIS DE LA COMMUNAUTE
+        </h2>
+        {communityReviews.length === 0 ? (
+          <div className="glass rounded-xl p-8 text-center">
+            <p className="text-[var(--text-muted)] mb-4">Soyez le premier à donner votre avis !</p>
+            {user && (
+              <button onClick={openWatchModal} className="btn-primary">
+                Donner mon avis
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {communityReviews.map(review => (
+              <div key={review.id} className="glass rounded-xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm"
+                      style={{ background: 'var(--accent-red)', color: 'white' }}>
+                      {review.author_name[0]?.toUpperCase()}
+                    </div>
+                    <div>
+                      <span className="text-white text-sm font-medium">{review.author_name}</span>
+                      <div className="flex gap-0.5">
+                        {[1,2,3,4,5].map(n => (
+                          <span key={n} style={{ color: n <= review.rating ? 'var(--accent-gold)' : 'rgba(255,255,255,0.2)', fontSize: '12px' }}>★</span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  {review.watched_date && (
+                    <span className="text-xs text-[var(--text-muted)]">
+                      {new Date(review.watched_date).toLocaleDateString('fr-BE')}
+                    </span>
+                  )}
+                </div>
+                {review.review && (
+                  <p className="text-sm text-[var(--text-muted)] italic">"{review.review}"</p>
+                )}
+              </div>
+            ))}
+            {user && (
+              <button onClick={openWatchModal}
+                className="text-sm text-[var(--text-muted)] hover:text-white transition-colors underline">
+                {myEntry ? 'Modifier mon avis' : 'Donner mon avis'}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* L'Entracte — posts sur ce film (US-071) */}
+      {filmPosts.length > 0 && (
+        <div className="mt-6">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-white font-semibold">Dans L'Entracte</h3>
+            <button
+              onClick={() => navigate(`/entracte?film_id=${film.id}`)}
+              className="text-[var(--accent-red)] text-sm hover:underline"
+            >
+              Voir tous
+            </button>
+          </div>
+          <div className="space-y-3">
+            {filmPosts.map(post => (
+              <PostCard
+                key={post.id}
+                post={post}
+                onDelete={id => setFilmPosts(prev => prev.filter(p => p.id !== id))}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* CreatePostModal (US-071) */}
+      {showCreatePost && (
+        <CreatePostModal
+          initialFilm={film}
+          onClose={() => setShowCreatePost(false)}
+          onCreated={post => {
+            setFilmPosts(prev => [post, ...prev].slice(0, 3))
+            setShowCreatePost(false)
+          }}
+        />
+      )}
+
+      {/* Modal "J'ai vu ce film" (US-063) */}
+      {showWatchedModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.8)' }}
+          onClick={() => setShowWatchedModal(false)}>
+          <div className="glass rounded-2xl p-6 w-full max-w-md space-y-4"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-white font-semibold">Mon avis — {film.title}</h3>
+              <button onClick={() => setShowWatchedModal(false)} className="text-[var(--text-muted)] hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-2">Ma note</label>
+              <div className="flex gap-2">
+                {[1,2,3,4,5].map(n => (
+                  <button key={n} type="button" onClick={() => setWatchRating(n)}
+                    style={{ fontSize: '28px', color: n <= watchRating ? 'var(--accent-gold)' : 'rgba(255,255,255,0.2)' }}>
+                    ★
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1">Date de visionnage</label>
+              <input type="date" value={watchDate} onChange={e => setWatchDate(e.target.value)}
+                className="input-field text-sm" max={new Date().toISOString().split('T')[0]} />
+            </div>
+
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1">Commentaire (optionnel)</label>
+              <textarea value={watchReview} onChange={e => setWatchReview(e.target.value)}
+                rows={3} placeholder="Mon avis sur ce film..." className="input-field resize-none text-sm" />
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={watchPublic} onChange={e => setWatchPublic(e.target.checked)}
+                className="w-4 h-4 accent-[var(--accent-red)]" />
+              <span className="text-sm text-[var(--text-muted)]">Rendre mon avis public</span>
+            </label>
+
+            <button onClick={handleSaveWatch} disabled={savingWatch || !watchRating}
+              className="btn-primary w-full disabled:opacity-60 flex items-center justify-center gap-2">
+              {savingWatch && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+              {myEntry ? 'Mettre à jour' : 'Enregistrer'}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Trailer modal */}
       {showTrailer && film.trailer_youtube_key && (
