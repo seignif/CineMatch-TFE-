@@ -1,4 +1,9 @@
+import json
+import uuid as _uuid
+
 from django.contrib.auth import get_user_model
+from django.http import HttpResponse
+from django.utils import timezone
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -201,3 +206,148 @@ class RecommendationsView(APIView):
             for r in recs
         ]
         return Response(data)
+
+
+class ExportDataView(APIView):
+    """US-059 : Export RGPD — GET /api/users/export-data/"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        from apps.matching.models import Match, PlannedOuting, Review
+        from apps.chat.models import Message
+        from apps.social.models import Post, PostComment
+        from apps.films.models import WatchedFilm
+        from django.db.models import Q
+
+        profile = {}
+        try:
+            p = user.profile
+            profile = {
+                'bio': p.bio,
+                'mood': p.mood,
+                'language_preference': p.language_preference,
+                'genre_preferences': p.genre_preferences,
+                'badges': p.badges,
+                'search_radius_km': p.search_radius_km,
+            }
+        except Exception:
+            pass
+
+        def serialize_dates(obj):
+            if hasattr(obj, 'isoformat'):
+                return obj.isoformat()
+            raise TypeError(f"Type {type(obj)} not serializable")
+
+        data = {
+            'export_date': timezone.now().isoformat(),
+            'user': {
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'username': user.username,
+                'city': user.city,
+                'date_joined': user.date_joined.isoformat(),
+                'is_email_verified': user.is_email_verified,
+                'cgu_accepted_at': user.cgu_accepted_at.isoformat() if user.cgu_accepted_at else None,
+            },
+            'profile': profile,
+            'matches': list(
+                Match.objects.filter(Q(user1=user) | Q(user2=user))
+                .values('created_at', 'status', 'score_compatibilite')
+            ),
+            'messages_sent': list(
+                Message.objects.filter(sender=user).values('content', 'created_at')
+            ),
+            'outings': list(
+                PlannedOuting.objects.filter(
+                    Q(proposer=user) | Q(match__user1=user) | Q(match__user2=user)
+                ).values('status', 'created_at', 'meeting_place')
+            ),
+            'reviews_given': list(
+                Review.objects.filter(reviewer=user)
+                .values('rating', 'would_go_again', 'comment', 'created_at')
+            ),
+            'posts': list(
+                Post.objects.filter(author=user).values('content', 'created_at')
+            ),
+            'comments': list(
+                PostComment.objects.filter(author=user).values('content', 'created_at')
+            ),
+            'journal': list(
+                WatchedFilm.objects.filter(user=user)
+                .values('film__title', 'rating', 'review', 'watched_date')
+            ),
+        }
+
+        json_data = json.dumps(data, default=serialize_dates, ensure_ascii=False, indent=2)
+
+        try:
+            from apps.users.email_service import EmailService
+            EmailService.send_export_confirmation(user)
+        except Exception:
+            pass
+
+        response = HttpResponse(json_data, content_type='application/json')
+        response['Content-Disposition'] = f'attachment; filename="cinematch_data_{user.id}.json"'
+        return response
+
+
+class DeleteAccountView(APIView):
+    """US-060 : Suppression de compte RGPD — POST /api/users/delete-account/"""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        user = request.user
+        password = request.data.get('password', '')
+
+        if not user.check_password(password):
+            return Response(
+                {"error": "Mot de passe incorrect."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        email = user.email
+        first_name = user.first_name
+
+        # Envoyer l'email avant de modifier l'adresse
+        try:
+            from apps.users.email_service import EmailService
+            EmailService.send_deletion_confirmation(email, first_name)
+        except Exception:
+            pass
+
+        # Blacklist le refresh token si fourni
+        refresh_token = request.data.get('refresh_token')
+        if refresh_token:
+            try:
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+            except Exception:
+                pass
+
+        # Anonymiser puis désactiver
+        self._anonymize_user(user)
+
+        return Response({"message": "Compte supprimé. Vos données personnelles seront effacées dans 30 jours."})
+
+    def _anonymize_user(self, user):
+        try:
+            profile = user.profile
+            profile.bio = ''
+            profile.profile_picture = None
+            profile.genre_preferences = {}
+            profile.badges = []
+            profile.latitude = None
+            profile.longitude = None
+            profile.save()
+        except Exception:
+            pass
+
+        anon_id = str(_uuid.uuid4())[:8]
+        user.email = f"deleted_{anon_id}@cinematch.deleted"
+        user.first_name = "Utilisateur"
+        user.last_name = "supprimé"
+        user.username = f"deleted_{anon_id}"
+        user.is_active = False
+        user.save()

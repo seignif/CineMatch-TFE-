@@ -25,6 +25,7 @@ class User(AbstractUser):
     date_of_birth = models.DateField(null=True, blank=True)
     city = models.CharField(max_length=100, blank=True)
     is_email_verified = models.BooleanField(default=False)
+    cgu_accepted_at = models.DateTimeField(null=True, blank=True)
 
     USERNAME_FIELD = 'email'
     REQUIRED_FIELDS = ['username', 'first_name', 'last_name']

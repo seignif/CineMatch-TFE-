@@ -32,6 +32,7 @@ export default function Register() {
   const [showPw, setShowPw] = useState(false)
   const [loading, setLoading] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [cguAccepted, setCguAccepted] = useState(false)
 
   const set = (field: string, value: string) => {
     setForm(f => ({ ...f, [field]: value }))
@@ -47,9 +48,14 @@ export default function Register() {
       return
     }
 
+    if (!cguAccepted) {
+      setErrors({ cgu: 'Vous devez accepter les CGU pour créer un compte.' })
+      return
+    }
+
     setLoading(true)
     try {
-      await register(form)
+      await register({ ...form, cgu_accepted: true })
       navigate('/films')
     } catch (err: unknown) {
       const data = (err as { response?: { data?: Record<string, string[]> } })?.response?.data
@@ -161,6 +167,36 @@ export default function Register() {
                 className="input-field"
               />
               {errors.password2 && <p className="text-xs text-[var(--accent-red)] mt-1">{errors.password2}</p>}
+            </div>
+
+            {/* CGU */}
+            <div className="pt-1">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={cguAccepted}
+                  onChange={e => {
+                    setCguAccepted(e.target.checked)
+                    setErrors(prev => ({ ...prev, cgu: '' }))
+                  }}
+                  className="mt-0.5 w-4 h-4 rounded accent-[var(--accent-red)]"
+                />
+                <span className="text-sm text-[var(--text-muted)] leading-relaxed">
+                  J'accepte les{' '}
+                  <a href="/cgu" target="_blank" rel="noopener noreferrer"
+                    className="underline hover:text-white transition-colors"
+                    style={{ color: 'var(--accent-red)' }}>
+                    Conditions Générales d'Utilisation
+                  </a>
+                  {' '}et la{' '}
+                  <a href="/cgu#confidentialite" target="_blank" rel="noopener noreferrer"
+                    className="underline hover:text-white transition-colors"
+                    style={{ color: 'var(--accent-red)' }}>
+                    Politique de confidentialité
+                  </a>
+                </span>
+              </label>
+              {errors.cgu && <p className="text-xs text-[var(--accent-red)] mt-1 ml-7">{errors.cgu}</p>}
             </div>
 
             {errors.general && (

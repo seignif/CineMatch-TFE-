@@ -24,4 +24,8 @@ urlpatterns = [
     path('users/badges/', views.BadgesView.as_view(), name='badges'),
     path('users/reputation/<int:pk>/', views.ReputationView.as_view(), name='reputation'),
     path('users/recommendations/', views.RecommendationsView.as_view(), name='recommendations'),
+
+    # RGPD (US-059/060)
+    path('users/export-data/', views.ExportDataView.as_view(), name='export-data'),
+    path('users/delete-account/', views.DeleteAccountView.as_view(), name='delete-account'),
 ]

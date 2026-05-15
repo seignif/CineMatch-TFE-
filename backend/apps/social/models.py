@@ -16,6 +16,7 @@ class Post(models.Model):
         related_name='posts',
     )
     content = models.TextField(max_length=280)
+    is_hidden = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -116,3 +117,68 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"{self.user.first_name} — {self.type}"
+
+
+class Report(models.Model):
+    """US-075/076 : Signalement de contenu inapproprié."""
+
+    TYPE_CHOICES = [
+        ('message', 'Message de chat'),
+        ('post', "Post L'Entracte"),
+        ('comment', "Commentaire L'Entracte"),
+    ]
+
+    REASON_CHOICES = [
+        ('harassment', 'Harcèlement'),
+        ('racism', 'Contenu raciste ou discriminatoire'),
+        ('sexual', 'Contenu sexuel non sollicité'),
+        ('spam', 'Spam'),
+        ('misinformation', 'Fausses informations'),
+        ('other', 'Autre'),
+    ]
+
+    STATUS_CHOICES = [
+        ('pending', 'En attente'),
+        ('treated', 'Traité'),
+        ('ignored', 'Ignoré'),
+    ]
+
+    reporter = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='reports_made',
+    )
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    reason = models.CharField(max_length=30, choices=REASON_CHOICES)
+    description = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+
+    post = models.ForeignKey(
+        'social.Post',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='reports',
+    )
+    comment = models.ForeignKey(
+        'social.PostComment',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='reports',
+    )
+    message_id = models.IntegerField(null=True, blank=True)
+    message_content = models.TextField(blank=True)
+    reported_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='reports_received',
+    )
+    admin_note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Signalement {self.type} par {self.reporter} — {self.reason}"
