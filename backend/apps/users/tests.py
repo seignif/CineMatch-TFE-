@@ -137,6 +137,7 @@ class TestRegisterView(TestCase):
             "password2": "StrongPass1!",
             "first_name": "New",
             "last_name": "User",
+            "cgu_accepted": True,
         }
 
     def test_register_success(self):
@@ -575,6 +576,106 @@ class TestResendVerificationView(TestCase):
     def test_resend_when_not_verified(self):
         response = self.client.post("/api/auth/resend-verification/")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+# ---------------------------------------------------------------------------
+# Sprint 10 — CGU, Export RGPD, Suppression de compte (US-059/060/074)
+# ---------------------------------------------------------------------------
+
+class TestRegisterCGU(TestCase):
+    """US-074 : CGU obligatoire à l'inscription."""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.url = "/api/auth/register/"
+        self.base = {
+            "email": "cgu@example.com",
+            "username": "cguuser",
+            "password": "StrongPass1!",
+            "password2": "StrongPass1!",
+            "first_name": "C",
+            "last_name": "G",
+        }
+
+    def test_register_without_cgu_rejected(self):
+        response = self.client.post(self.url, self.base, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_register_with_cgu_false_rejected(self):
+        response = self.client.post(self.url, {**self.base, "cgu_accepted": False}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_register_with_cgu_true_accepted(self):
+        response = self.client.post(self.url, {**self.base, "cgu_accepted": True}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+    def test_cgu_accepted_at_set_on_register(self):
+        self.client.post(self.url, {**self.base, "cgu_accepted": True}, format="json")
+        user = User.objects.get(email="cgu@example.com")
+        self.assertIsNotNone(user.cgu_accepted_at)
+
+
+class TestExportDataView(TestCase):
+    """US-059 : Export RGPD."""
+
+    def setUp(self):
+        self.user = make_user("export@example.com", "exportuser", password="ExportPass1!")
+        self.client = auth_client(self.user)
+
+    def test_export_requires_auth(self):
+        response = APIClient().get("/api/users/export-data/")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_export_returns_json_attachment(self):
+        response = self.client.get("/api/users/export-data/")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("attachment", response.get("Content-Disposition", ""))
+        self.assertEqual(response["Content-Type"], "application/json")
+
+    def test_export_contains_user_data(self):
+        response = self.client.get("/api/users/export-data/")
+        import json
+        data = json.loads(response.content)
+        self.assertIn("user", data)
+        self.assertEqual(data["user"]["email"], "export@example.com")
+
+    def test_export_contains_required_sections(self):
+        response = self.client.get("/api/users/export-data/")
+        import json
+        data = json.loads(response.content)
+        for key in ("matches", "messages_sent", "outings", "reviews_given", "posts", "journal"):
+            self.assertIn(key, data)
+
+
+class TestDeleteAccountView(TestCase):
+    """US-060 : Suppression de compte avec anonymisation."""
+
+    def setUp(self):
+        self.user = make_user("delete@example.com", "deleteuser", password="DeletePass1!")
+        self.client = auth_client(self.user)
+        self.url = "/api/users/delete-account/"
+
+    def test_delete_requires_auth(self):
+        response = APIClient().post(self.url, {"password": "DeletePass1!"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_delete_wrong_password_rejected(self):
+        response = self.client.post(self.url, {"password": "WrongPass!"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_delete_correct_password_succeeds(self):
+        response = self.client.post(self.url, {"password": "DeletePass1!"}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_delete_anonymizes_user(self):
+        self.client.post(self.url, {"password": "DeletePass1!"}, format="json")
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_active)
+        self.assertIn("deleted_", self.user.email)
+
+    def test_delete_missing_password_rejected(self):
+        response = self.client.post(self.url, {}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_resend_when_already_verified(self):
         self.user.is_email_verified = True
