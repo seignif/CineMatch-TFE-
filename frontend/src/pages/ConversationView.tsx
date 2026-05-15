@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send } from 'lucide-react'
+import { ArrowLeft, Send, AlertTriangle } from 'lucide-react'
 import { useChat } from '../hooks/useChat'
-import { chatApi } from '../services/api'
+import { chatApi, socialApi } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import { mediaUrl } from '../utils/media'
 import type { Conversation } from '../types'
+import { ReportModal } from '../components/ReportModal'
 
 function formatTime(dateStr: string) {
   return new Date(dateStr).toLocaleTimeString('fr-BE', { hour: '2-digit', minute: '2-digit' })
@@ -19,6 +20,7 @@ export default function ConversationView() {
   const { messages, connected, sendMessage, markRead } = useChat(convId)
   const [input, setInput] = useState('')
   const [conversation, setConversation] = useState<Conversation | null>(null)
+  const [reportMsg, setReportMsg] = useState<{ id: number; content: string; senderId: number } | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -101,7 +103,16 @@ export default function ConversationView() {
         {messages.map(msg => {
           const isMe = msg.sender_id === user?.id
           return (
-            <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+            <div key={msg.id} className={`flex items-end gap-1.5 group ${isMe ? 'justify-end' : 'justify-start'}`}>
+              {!isMe && (
+                <button
+                  onClick={() => setReportMsg({ id: msg.id, content: msg.content, senderId: msg.sender_id })}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-[var(--text-muted)] hover:text-orange-400 p-1 shrink-0"
+                  title="Signaler ce message"
+                >
+                  <AlertTriangle size={13} />
+                </button>
+              )}
               <div className={`max-w-[75%] rounded-2xl px-4 py-2 ${isMe ? 'rounded-br-sm' : 'rounded-bl-sm'}`}
                 style={{
                   background: isMe ? 'var(--accent-red)' : 'rgba(255,255,255,0.08)',
@@ -122,6 +133,23 @@ export default function ConversationView() {
         })}
         <div ref={bottomRef} />
       </div>
+
+      {reportMsg && (
+        <ReportModal
+          type="message"
+          onClose={() => setReportMsg(null)}
+          onSubmit={async (reason, description) => {
+            await socialApi.createReport({
+              type: 'message',
+              reason,
+              description,
+              message_id: reportMsg.id,
+              message_content: reportMsg.content,
+              reported_user: reportMsg.senderId,
+            })
+          }}
+        />
+      )}
 
       {/* Input */}
       <div className="glass border-t border-white/5 px-4 py-3 flex items-center gap-3 shrink-0">

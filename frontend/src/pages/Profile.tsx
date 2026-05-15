@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { Camera, Save, Eye, User, MapPin, Search, X, Award, Navigation } from 'lucide-react'
+import { Camera, Save, Eye, User, MapPin, Search, X, Award, Navigation, Settings } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { usersApi, filmsApi, badgesApi, authApi } from '../services/api'
 import type { Film, Badge, ReputationScore } from '../types'
@@ -24,10 +25,11 @@ const GENRE_OPTIONS = [
   'Science-fiction', 'Animation', 'Documentaire', 'Romance', 'Aventure',
 ]
 
-type Tab = 'infos' | 'preferences' | 'public' | 'badges'
+type Tab = 'infos' | 'preferences' | 'public' | 'badges' | 'parametres'
 
 export default function Profile() {
-  const { user, fetchMe } = useAuthStore()
+  const { user, fetchMe, logout } = useAuthStore()
+  const navigate = useNavigate()
   const fileRef = useRef<HTMLInputElement>(null)
   const [tab, setTab] = useState<Tab>('infos')
   const [loading, setLoading] = useState(false)
@@ -59,6 +61,13 @@ export default function Profile() {
   // Badges & réputation
   const [badges, setBadges] = useState<Badge[]>([])
   const [reputation, setReputation] = useState<ReputationScore | null>(null)
+
+  // Suppression de compte
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteError, setDeleteError] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const [exportLoading, setExportLoading] = useState(false)
 
   useEffect(() => {
     if (user) {
@@ -201,6 +210,44 @@ export default function Profile() {
     setGenrePrefs(prev => ({ ...prev, [genre]: value }))
   }
 
+  const handleExportData = async () => {
+    setExportLoading(true)
+    try {
+      const token = localStorage.getItem('access_token')
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || '/api'}/users/export-data/`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `cinematch_data_${new Date().toISOString().split('T')[0]}.json`
+      a.click()
+      window.URL.revokeObjectURL(url)
+      showSuccess('Export téléchargé ! Un email de confirmation vous a été envoyé.')
+    } catch {
+      showSuccess('Erreur lors de l\'export.')
+    } finally {
+      setExportLoading(false)
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    if (!deletePassword) return
+    setDeleting(true)
+    setDeleteError('')
+    try {
+      await usersApi.deleteAccount(deletePassword)
+      logout()
+      navigate('/')
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error
+      setDeleteError(msg || 'Erreur lors de la suppression.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   if (!user) return null
 
   return (
@@ -261,12 +308,13 @@ export default function Profile() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 glass rounded-lg p-1 mb-6">
+      <div className="flex gap-1 glass rounded-lg p-1 mb-6 flex-wrap">
         {([
           { id: 'infos', label: 'Mes infos', icon: User },
           { id: 'preferences', label: 'Préférences', icon: Save },
           { id: 'public', label: 'Profil public', icon: Eye },
           { id: 'badges', label: 'Badges', icon: Award },
+          { id: 'parametres', label: 'Paramètres', icon: Settings },
         ] as { id: Tab; label: string; icon: typeof User }[]).map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setTab(id)}
             className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -608,6 +656,109 @@ export default function Profile() {
           <p className="text-xs text-[var(--text-muted)] italic">
             C'est ainsi que les autres utilisateurs voient ton profil. Email et mot de passe ne sont jamais affichés.
           </p>
+        </div>
+      )}
+
+      {/* Tab: Paramètres */}
+      {tab === 'parametres' && (
+        <div className="space-y-6">
+          {/* Export RGPD */}
+          <div className="glass rounded-2xl p-6">
+            <h3 className="text-sm font-medium text-white uppercase tracking-wider mb-1">Mes données (RGPD)</h3>
+            <p className="text-[var(--text-muted)] text-sm mb-4 leading-relaxed">
+              Conformément au RGPD, vous avez le droit d'accéder à toutes vos données et de les télécharger.
+              L'export inclut : profil, matchs, messages, sorties, avis, posts et journal.
+            </p>
+            <button
+              onClick={handleExportData}
+              disabled={exportLoading}
+              className="btn-secondary flex items-center gap-2 disabled:opacity-60"
+            >
+              {exportLoading
+                ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                : null}
+              Exporter mes données
+            </button>
+          </div>
+
+          {/* Liens légaux */}
+          <div className="glass rounded-2xl p-6">
+            <h3 className="text-sm font-medium text-white uppercase tracking-wider mb-3">Informations légales</h3>
+            <div className="flex flex-col gap-2">
+              <a href="/cgu" target="_blank" rel="noopener noreferrer"
+                className="text-sm hover:text-white transition-colors underline"
+                style={{ color: 'var(--accent-red)' }}>
+                Conditions Générales d'Utilisation
+              </a>
+              <a href="/cgu#confidentialite" target="_blank" rel="noopener noreferrer"
+                className="text-sm hover:text-white transition-colors underline"
+                style={{ color: 'var(--accent-red)' }}>
+                Politique de confidentialité
+              </a>
+            </div>
+          </div>
+
+          {/* Zone de danger */}
+          <div className="rounded-2xl p-6 space-y-3"
+            style={{ background: 'rgba(230,57,70,0.05)', border: '1px solid rgba(230,57,70,0.2)' }}>
+            <h3 className="text-sm font-medium uppercase tracking-wider" style={{ color: 'var(--accent-red)' }}>
+              Zone de danger
+            </h3>
+            <p className="text-[var(--text-muted)] text-sm leading-relaxed">
+              La suppression de votre compte est irréversible. Vos données personnelles seront effacées
+              définitivement dans 30 jours. Vos messages et posts resteront visibles de façon anonyme.
+            </p>
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              style={{ background: 'rgba(230,57,70,0.15)', color: 'var(--accent-red)', border: '1px solid rgba(230,57,70,0.3)' }}
+            >
+              Supprimer mon compte
+            </button>
+          </div>
+
+          {/* Modal suppression */}
+          {showDeleteModal && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+              style={{ background: 'rgba(0,0,0,0.7)' }}
+              onClick={() => setShowDeleteModal(false)}>
+              <div className="w-full max-w-md rounded-2xl p-6 space-y-4"
+                style={{ background: 'var(--bg-card)', border: '1px solid rgba(255,255,255,0.08)' }}
+                onClick={e => e.stopPropagation()}>
+                <h3 className="text-white font-semibold text-lg">Supprimer mon compte</h3>
+                <div className="rounded-xl p-4 text-sm space-y-1"
+                  style={{ background: 'rgba(230,57,70,0.08)', border: '1px solid rgba(230,57,70,0.2)' }}>
+                  <p className="font-medium" style={{ color: 'var(--accent-red)' }}>Cette action est irréversible.</p>
+                  <p className="text-[var(--text-muted)]">Vos données personnelles seront supprimées dans 30 jours.</p>
+                  <p className="text-[var(--text-muted)]">Vos messages et posts resteront visibles de façon anonyme.</p>
+                </div>
+                <div>
+                  <label className="block text-sm text-[var(--text-muted)] mb-1.5">Confirmez avec votre mot de passe</label>
+                  <input
+                    type="password"
+                    value={deletePassword}
+                    onChange={e => setDeletePassword(e.target.value)}
+                    placeholder="Votre mot de passe"
+                    className="input-field"
+                  />
+                  {deleteError && <p className="text-xs mt-1" style={{ color: 'var(--accent-red)' }}>{deleteError}</p>}
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={() => setShowDeleteModal(false)} className="flex-1 btn-secondary text-sm">
+                    Annuler
+                  </button>
+                  <button
+                    onClick={handleDeleteAccount}
+                    disabled={!deletePassword || deleting}
+                    className="flex-1 py-2 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-40"
+                    style={{ background: 'var(--accent-red)' }}
+                  >
+                    {deleting ? 'Suppression...' : 'Supprimer définitivement'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

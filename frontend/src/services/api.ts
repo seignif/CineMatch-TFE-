@@ -120,6 +120,8 @@ export const usersApi = {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
   },
+  deleteAccount: (password: string) =>
+    api.post('/users/delete-account/', { password }),
 }
 
 export const matchingApi = {
@@ -195,6 +197,16 @@ export const socialApi = {
   getUnreadCount: () => api.get('/social/notifications/unread-count/'),
   markAllRead: () => api.post('/social/notifications/read/'),
   markOneRead: (id: number) => api.post(`/social/notifications/${id}/read/`),
+  createReport: (data: {
+    type: 'message' | 'group_message' | 'post' | 'comment'
+    reason: string
+    description?: string
+    post?: number
+    comment?: number
+    message_id?: number
+    message_content?: string
+    reported_user?: number
+  }) => api.post('/social/reports/', data),
 }
 
 export default api

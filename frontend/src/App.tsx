@@ -18,6 +18,7 @@ import Journal from './pages/Journal'
 import VerifyEmail from './pages/VerifyEmail'
 import Entracte from './pages/Entracte'
 import Notifications from './pages/Notifications'
+import CGU from './pages/CGU'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
@@ -38,6 +39,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/verify-email/:token" element={<VerifyEmail />} />
+        <Route path="/cgu" element={<CGU />} />
         <Route element={<Layout />}>
           <Route path="/films" element={<Films />} />
           <Route path="/films/:id" element={<FilmDetail />} />
