@@ -7,14 +7,14 @@ nixPkgs = [
 
 [phases.install]
 cmds = [
-    "python3 -m ensurepip --upgrade",
-    "python3 -m pip install -r requirements.txt",
-    "python3 -m playwright install chromium",
+    "python3 -m venv /app/venv",
+    "/app/venv/bin/pip install -r requirements.txt",
+    "/app/venv/bin/playwright install chromium",
 ]
 
 [phases.build]
 cmds = [
-    "python manage.py collectstatic --noinput",
+    "/app/venv/bin/python manage.py collectstatic --noinput",
 ]
 
 [variables]
