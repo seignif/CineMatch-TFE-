@@ -1,7 +1,7 @@
 [phases.setup]
 nixPkgs = [
-    "python313",
     # Libs système requises par le Chromium de Playwright (noms nixpkgs valides)
+    # Python 3.13 est auto-détecté depuis runtime.txt — ne pas le spécifier ici
     "nss", "nspr", "atk", "cups", "libdrm",
     "libxkbcommon", "gtk3", "pango", "cairo", "glib", "alsa-lib",
 ]
