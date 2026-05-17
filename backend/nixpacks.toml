@@ -8,9 +8,8 @@ nixPkgs = [
 
 [phases.install]
 cmds = [
-    "pip install -r requirements.txt",
-    # Installe le Chromium bundlé de Playwright (indépendant de PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD)
-    "playwright install chromium",
+    "python3 -m pip install -r requirements.txt",
+    "python3 -m playwright install chromium",
 ]
 
 [phases.build]
