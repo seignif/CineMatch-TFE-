@@ -3,7 +3,7 @@ nixPkgs = [
     "python313",
     # Libs système requises par le Chromium de Playwright (noms nixpkgs valides)
     "nss", "nspr", "atk", "cups", "libdrm",
-    "xorg.libxkbcommon", "gtk3", "pango", "cairo", "glib", "alsa-lib",
+    "libxkbcommon", "gtk3", "pango", "cairo", "glib", "alsa-lib",
 ]
 
 [phases.install]
