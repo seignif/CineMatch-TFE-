@@ -1,9 +1,16 @@
 [phases.setup]
-nixPkgs = ["python313"]
+nixPkgs = [
+    "python313",
+    # Libs système requises par le Chromium de Playwright (noms nixpkgs valides)
+    "nss", "nspr", "atk", "cups", "libdrm",
+    "xorg.libxkbcommon", "gtk3", "pango", "cairo", "glib", "alsa-lib",
+]
 
 [phases.install]
 cmds = [
     "pip install -r requirements.txt",
+    # Installe le Chromium bundlé de Playwright (indépendant de PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD)
+    "playwright install chromium",
 ]
 
 [phases.build]
@@ -12,6 +19,7 @@ cmds = [
 ]
 
 [variables]
-# Empêche nixpacks de détecter playwright et d'ajouter chromium-driver (paquet inexistant)
-# Le scraper Kinepolis n'est pas exécuté en prod (Cloudflare bloque les IPs Railway)
+# Empêche nixpacks d'auto-détecter playwright et d'ajouter "chromium-driver" (paquet inexistant)
+# N'affecte PAS "playwright install chromium" (commande CLI indépendante)
 PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1"
+PLAYWRIGHT_BROWSERS_PATH = "/app/ms-playwright"
