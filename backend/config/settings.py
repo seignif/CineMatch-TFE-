@@ -8,14 +8,16 @@ SECRET_KEY = config('SECRET_KEY', default='dev-secret-key-change-in-prod')
 DEBUG = config('DEBUG', default=False, cast=bool)
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
 
-# Railway injecte RAILWAY_STATIC_URL automatiquement — on l'ajoute aux hosts autorisés
+# Railway : hosts auto-détectés
 _railway_host = os.getenv('RAILWAY_STATIC_URL', '')
 if _railway_host and _railway_host not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(_railway_host)
-# Accepter tous les sous-domaines *.up.railway.app et *.railway.app
 _railway_public = os.getenv('RAILWAY_PUBLIC_DOMAIN', '')
 if _railway_public and _railway_public not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append(_railway_public)
+# Le healthcheck Railway utilise toujours ce host fixe
+if 'healthcheck.railway.app' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('healthcheck.railway.app')
 
 INSTALLED_APPS = [
     'daphne',
