@@ -1,11 +1,12 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Heart, MessageCircle, Trash2 } from 'lucide-react'
+import { Heart, MessageCircle, Trash2, AlertTriangle } from 'lucide-react'
 import type { Post, PostComment } from '../types'
 import { socialApi } from '../services/api'
 import { useAuthStore } from '../store/authStore'
 import { formatDistanceToNow } from '../utils/dateUtils'
 import { mediaUrl } from '../utils/media'
+import { ReportModal } from './ReportModal'
 
 interface Props {
   post: Post
@@ -23,6 +24,7 @@ export const PostCard: React.FC<Props> = ({ post, onDelete }) => {
   const [likeCount, setLikeCount] = useState(post.like_count)
   const [commentCount, setCommentCount] = useState(post.comment_count)
   const [loadingLike, setLoadingLike] = useState(false)
+  const [showReport, setShowReport] = useState(false)
 
   const handleLike = async () => {
     if (loadingLike) return
@@ -87,12 +89,20 @@ export const PostCard: React.FC<Props> = ({ post, onDelete }) => {
           <p className="text-white font-medium text-sm">{post.author_name}</p>
           <p className="text-[var(--text-muted)] text-xs">{formatDistanceToNow(post.created_at)}</p>
         </div>
-        {post.is_author && (
+        {post.is_author ? (
           <button
             onClick={handleDelete}
             className="text-[var(--text-muted)] hover:text-red-400 transition-colors p-1"
           >
             <Trash2 size={15} />
+          </button>
+        ) : (
+          <button
+            onClick={() => setShowReport(true)}
+            className="text-[var(--text-muted)] hover:text-orange-400 transition-colors p-1"
+            title="Signaler ce post"
+          >
+            <AlertTriangle size={15} />
           </button>
         )}
       </div>
@@ -140,6 +150,22 @@ export const PostCard: React.FC<Props> = ({ post, onDelete }) => {
           <span>{commentCount}</span>
         </button>
       </div>
+
+      {showReport && (
+        <ReportModal
+          type="post"
+          onClose={() => setShowReport(false)}
+          onSubmit={async (reason, description) => {
+            await socialApi.createReport({
+              type: 'post',
+              reason,
+              description,
+              post: post.id,
+              reported_user: post.author_id,
+            })
+          }}
+        />
+      )}
 
       {/* Commentaires */}
       {showComments && (

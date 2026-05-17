@@ -13,13 +13,22 @@ class RegisterSerializer(serializers.ModelSerializer):
         write_only=True, required=True, validators=[validate_password]
     )
     password2 = serializers.CharField(write_only=True, required=True)
+    cgu_accepted = serializers.BooleanField(write_only=True)
 
     class Meta:
         model = User
         fields = [
             'email', 'username', 'password', 'password2',
             'first_name', 'last_name', 'date_of_birth', 'city',
+            'cgu_accepted',
         ]
+
+    def validate_cgu_accepted(self, value):
+        if not value:
+            raise serializers.ValidationError(
+                "Vous devez accepter les CGU pour créer un compte."
+            )
+        return value
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password2']:
@@ -30,9 +39,12 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data.pop('password2')
+        validated_data.pop('cgu_accepted')
         password = validated_data.pop('password')
+        from django.utils import timezone
         user = User(**validated_data)
         user.set_password(password)
+        user.cgu_accepted_at = timezone.now()
         user.save()
         # Signal crée déjà le profil, get_or_create pour sécurité
         UserProfile.objects.get_or_create(user=user)

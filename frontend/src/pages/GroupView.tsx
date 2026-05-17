@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, Users, Film, MessageCircle, ThumbsUp, ThumbsDown, Search, Check, LogOut, X, Pencil, UserPlus } from 'lucide-react'
-import { groupsApi, matchingApi, filmsApi } from '../services/api'
+import { ArrowLeft, Send, Users, Film, MessageCircle, ThumbsUp, ThumbsDown, Search, Check, LogOut, X, Pencil, UserPlus, AlertTriangle } from 'lucide-react'
+import { groupsApi, matchingApi, filmsApi, socialApi } from '../services/api'
+import { ReportModal } from '../components/ReportModal'
 import { useAuthStore } from '../store/authStore'
 import { useGroupChat } from '../hooks/useGroupChat'
 import type { Group, Film as FilmType, Match } from '../types'
@@ -29,6 +30,7 @@ export default function GroupView() {
   const [selectedInviteIds, setSelectedInviteIds] = useState<number[]>([])
   const [inviting, setInviting] = useState(false)
   const [removingId, setRemovingId] = useState<number | null>(null)
+  const [reportMsg, setReportMsg] = useState<{ id: number; content: string; senderId: number } | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const { messages, connected, sendMessage } = useGroupChat(group ? groupId : null)
@@ -486,7 +488,16 @@ export default function GroupView() {
               }
               const isMe = msg.sender_id === user?.id
               return (
-                <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+                <div key={msg.id} className={`flex items-end gap-1 group ${isMe ? 'justify-end' : 'justify-start'}`}>
+                  {!isMe && (
+                    <button
+                      onClick={() => setReportMsg({ id: msg.id, content: msg.content, senderId: msg.sender_id })}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity text-[var(--text-muted)] hover:text-orange-400 p-1 shrink-0"
+                      title="Signaler ce message"
+                    >
+                      <AlertTriangle size={13} />
+                    </button>
+                  )}
                   <div className={`max-w-xs rounded-2xl px-4 py-2 ${
                     isMe ? 'rounded-tr-sm text-white' : 'rounded-tl-sm'
                   }`} style={{
@@ -500,6 +511,23 @@ export default function GroupView() {
             })}
             <div ref={messagesEndRef} />
           </div>
+
+          {reportMsg && (
+            <ReportModal
+              type="message"
+              onClose={() => setReportMsg(null)}
+              onSubmit={async (reason, description) => {
+                await socialApi.createReport({
+                  type: 'group_message',
+                  reason,
+                  description,
+                  message_id: reportMsg.id,
+                  message_content: reportMsg.content,
+                  reported_user: reportMsg.senderId,
+                })
+              }}
+            />
+          )}
 
           <div className="px-4 pb-6 pt-2">
             <div className="flex gap-2">

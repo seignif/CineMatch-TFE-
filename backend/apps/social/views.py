@@ -1,9 +1,10 @@
 from rest_framework import generics, status, permissions
+from rest_framework import serializers as drf_serializers
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from django.db.models import Q
 
-from apps.social.models import Notification, Post, PostComment, PostLike
+from apps.social.models import Notification, Post, PostComment, PostLike, Report
 from apps.social.serializers import (
     NotificationSerializer, PostCommentSerializer, PostSerializer,
 )
@@ -15,7 +16,7 @@ class PostListCreateView(generics.ListCreateAPIView):
     serializer_class = PostSerializer
 
     def get_queryset(self):
-        qs = Post.objects.select_related(
+        qs = Post.objects.filter(is_hidden=False).select_related(
             'author__profile', 'film'
         ).prefetch_related(
             'likes', 'comments__author__profile'
@@ -190,3 +191,53 @@ class UnreadNotificationCountView(APIView):
     def get(self, request):
         count = Notification.objects.filter(user=request.user, is_read=False).count()
         return Response({"unread_count": count})
+
+
+class ReportSerializer(drf_serializers.ModelSerializer):
+    class Meta:
+        model = Report
+        fields = [
+            'type', 'reason', 'description',
+            'post', 'comment', 'message_id',
+            'message_content', 'reported_user',
+        ]
+
+
+class ReportCreateView(generics.CreateAPIView):
+    """US-075/076 : Signaler un contenu — POST /api/social/reports/"""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ReportSerializer
+
+    def create(self, request, *args, **kwargs):
+        # Empêcher de se signaler soi-même
+        reported_user_id = request.data.get('reported_user')
+        if reported_user_id and str(reported_user_id) == str(request.user.id):
+            return Response(
+                {"error": "Vous ne pouvez pas vous signaler vous-même."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Empêcher les doublons
+        existing = Report.objects.filter(
+            reporter=request.user,
+            post_id=request.data.get('post') or None,
+            message_id=request.data.get('message_id') or None,
+            status='pending',
+        ).first()
+        if existing:
+            return Response(
+                {"message": "Vous avez déjà signalé ce contenu."},
+                status=status.HTTP_200_OK,
+            )
+
+        return super().create(request, *args, **kwargs)
+
+    def perform_create(self, serializer):
+        report = serializer.save(reporter=self.request.user)
+
+        # Auto-masquer le post si 3 signalements pending
+        if report.post:
+            count = Report.objects.filter(post=report.post, status='pending').count()
+            if count >= 3:
+                report.post.is_hidden = True
+                report.post.save(update_fields=['is_hidden'])

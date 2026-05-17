@@ -135,6 +135,39 @@ class EmailService:
             raise
 
     @staticmethod
+    def send_export_confirmation(user):
+        """Email de confirmation après export RGPD."""
+        from django.utils import timezone
+        send_mail(
+            subject="Vos données CineMatch ont été exportées",
+            message=(
+                f"Bonjour {user.first_name},\n\n"
+                f"Vos données ont été exportées le {timezone.now().strftime('%d/%m/%Y à %H:%M')}.\n\n"
+                "Si vous n'êtes pas à l'origine de cette action, contactez-nous immédiatement.\n\n"
+                "L'équipe CineMatch"
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            fail_silently=True,
+        )
+
+    @staticmethod
+    def send_deletion_confirmation(email, first_name):
+        """Email de confirmation après suppression de compte."""
+        send_mail(
+            subject="Votre compte CineMatch a été supprimé",
+            message=(
+                f"Bonjour {first_name},\n\n"
+                "Votre demande de suppression de compte a bien été prise en compte.\n"
+                "Vos données personnelles seront définitivement supprimées dans 30 jours.\n\n"
+                "L'équipe CineMatch"
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+            fail_silently=True,
+        )
+
+    @staticmethod
     def verify_token(token_str: str):
         """Vérifie le token et active le compte. Retourne (success, message)."""
         from apps.users.models import EmailVerificationToken
