@@ -1,0 +1,28 @@
+[phases.setup]
+nixPkgs = [
+  "python313",
+  "chromium",
+  "chromium-driver",
+  "nss",
+  "nspr",
+  "atk",
+  "cups",
+  "libdrm",
+  "xorg.libxkbcommon",
+  "gtk3",
+  "pango",
+  "cairo",
+  "glib",
+  "alsa-lib",
+]
+
+[phases.install]
+cmds = [
+  "pip install -r requirements.txt",
+  "playwright install chromium",
+]
+
+[phases.build]
+cmds = [
+  "python manage.py collectstatic --noinput",
+]

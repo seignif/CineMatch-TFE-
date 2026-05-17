@@ -1,11 +1,21 @@
+import os
 from pathlib import Path
 from decouple import config
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-SECRET_KEY = config('SECRET_KEY')
+SECRET_KEY = config('SECRET_KEY', default='dev-secret-key-change-in-prod')
 DEBUG = config('DEBUG', default=False, cast=bool)
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost').split(',')
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
+
+# Railway injecte RAILWAY_STATIC_URL automatiquement — on l'ajoute aux hosts autorisés
+_railway_host = os.getenv('RAILWAY_STATIC_URL', '')
+if _railway_host and _railway_host not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_railway_host)
+# Accepter tous les sous-domaines *.up.railway.app et *.railway.app
+_railway_public = os.getenv('RAILWAY_PUBLIC_DOMAIN', '')
+if _railway_public and _railway_public not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(_railway_public)
 
 INSTALLED_APPS = [
     'daphne',
@@ -65,17 +75,29 @@ TEMPLATES = [
 ASGI_APPLICATION = 'config.asgi.application'
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# Database
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DB_NAME', default='cinematch'),
-        'USER': config('DB_USER', default='cinematch_user'),
-        'PASSWORD': config('DB_PASSWORD', default='cinematch_pass'),
-        'HOST': config('DB_HOST', default='localhost'),
-        'PORT': config('DB_PORT', default='5432'),
+# Database — Railway injecte DATABASE_URL automatiquement en prod
+import dj_database_url as _dj_db_url
+
+_DATABASE_URL = os.getenv('DATABASE_URL')
+if _DATABASE_URL:
+    DATABASES = {
+        'default': _dj_db_url.parse(
+            _DATABASE_URL,
+            conn_max_age=600,
+            conn_health_checks=True,
+        )
     }
-}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': config('DB_NAME', default='cinematch'),
+            'USER': config('DB_USER', default='cinematch_user'),
+            'PASSWORD': config('DB_PASSWORD', default='cinematch_pass'),
+            'HOST': config('DB_HOST', default='localhost'),
+            'PORT': config('DB_PORT', default='5432'),
+        }
+    }
 
 # Auth
 AUTH_USER_MODEL = 'users.User'
@@ -103,6 +125,14 @@ STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
@@ -139,10 +169,12 @@ SIMPLE_JWT = {
 }
 
 # CORS
-CORS_ALLOWED_ORIGINS = [
-    'http://localhost:5173',  # Vite dev server
+_cors_extra = config('CORS_ALLOWED_ORIGINS', default='').split(',')
+CORS_ALLOWED_ORIGINS = [o for o in [
+    'http://localhost:5173',
     'http://127.0.0.1:5173',
-]
+    *_cors_extra,
+] if o]
 CORS_ALLOW_CREDENTIALS = True
 
 # Channels (WebSocket)

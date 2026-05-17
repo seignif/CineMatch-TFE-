@@ -7,17 +7,33 @@ Outputs Drupal.settings.variables as JSON to stdout, or exits with code 1 on err
 """
 import json
 import sys
+import platform
 
 
 def main():
     from playwright.sync_api import sync_playwright
 
+    is_linux = platform.system() == "Linux"
+
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=False,
-            channel="chrome",
-            args=["--disable-blink-features=AutomationControlled"],
-        )
+        if is_linux:
+            # Prod / CI : headless obligatoire, pas de Chrome installé → Chromium system
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    "--no-sandbox",
+                    "--disable-setuid-sandbox",
+                    "--disable-dev-shm-usage",
+                    "--disable-blink-features=AutomationControlled",
+                ],
+            )
+        else:
+            # Windows dev : headless=False requis (Cloudflare bloque headless)
+            browser = p.chromium.launch(
+                headless=False,
+                channel="chrome",
+                args=["--disable-blink-features=AutomationControlled"],
+            )
         try:
             page = browser.new_page()
             page.goto("https://kinepolis.be/fr/", wait_until="networkidle")
