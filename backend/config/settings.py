@@ -204,17 +204,6 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Europe/Brussels'
 CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
 
-from celery.schedules import crontab
-CELERY_BEAT_SCHEDULE = {
-    'sync-kinepolis-every-3h': {
-        'task': 'apps.films.tasks.sync_kinepolis_all',
-        'schedule': crontab(minute=0, hour='*/3'),
-    },
-    'cleanup-old-seances-daily': {
-        'task': 'apps.films.tasks.cleanup_old_seances',
-        'schedule': crontab(hour=6, minute=0),
-    },
-}
 
 # Redis Cache
 CACHES = {
