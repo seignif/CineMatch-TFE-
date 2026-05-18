@@ -1,6 +1,6 @@
 [phases.setup]
 nixPkgs = [
-    "python313",
+    "python313", "openssl", "cacert",
     "nss", "nspr", "atk", "cups", "libdrm",
     "libxkbcommon", "gtk3", "pango", "cairo", "glib", "alsa-lib",
 ]
