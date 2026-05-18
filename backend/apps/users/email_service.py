@@ -1,7 +1,8 @@
-"""US-065 : Service d'envoi d'emails via Resend HTTP API (pas SMTP — bloqué sur Railway)."""
+"""US-065 : Service d'envoi d'emails via Resend REST API (requests, port 443)."""
 import logging
 import uuid
 
+import requests
 from django.conf import settings
 from django.core.mail import send_mail
 from django.utils import timezone
@@ -12,22 +13,24 @@ logger = logging.getLogger(__name__)
 
 def _send_email(*, subject: str, from_email: str, to: str, text: str, html: str):
     """
-    Envoie via Resend HTTP API si RESEND_API_KEY est défini,
-    sinon fallback Django send_mail (console backend en dev).
+    Envoie via l'API REST Resend (HTTPS port 443) si RESEND_API_KEY est défini.
+    Fallback : Django send_mail (console backend en dev).
+    On n'utilise pas le package resend ni SMTP (tous deux bloqués sur Railway).
     """
     api_key = getattr(settings, 'RESEND_API_KEY', '') or ''
     if api_key:
-        import resend as _resend
-        _resend.api_key = api_key
-        _resend.Emails.send({
-            "from": from_email,
-            "to": [to],
-            "subject": subject,
-            "html": html,
-            "text": text,
-        })
+        payload = {"from": from_email, "to": [to], "subject": subject, "text": text}
+        if html:
+            payload["html"] = html
+        resp = requests.post(
+            "https://api.resend.com/emails",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=15,
+        )
+        resp.raise_for_status()
     else:
-        send_mail(subject, text, from_email, [to], html_message=html, fail_silently=False)
+        send_mail(subject, text, from_email, [to], html_message=html or None, fail_silently=False)
 
 
 class EmailService:
