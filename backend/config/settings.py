@@ -237,6 +237,7 @@ EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='resend')
 EMAIL_HOST_PASSWORD = config('RESEND_API_KEY', default='')
 DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='onboarding@resend.dev')
 FRONTEND_URL = config('FRONTEND_URL', default='http://localhost:5173')
+EMAIL_VERIFICATION_ENABLED = config('EMAIL_VERIFICATION_ENABLED', default=True, cast=bool)
 
 # APIs externes
 TMDB_API_KEY = config('TMDB_API_KEY', default='')

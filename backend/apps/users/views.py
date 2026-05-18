@@ -31,12 +31,18 @@ class RegisterView(generics.CreateAPIView):
         user = serializer.save()
 
         # US-065 : email de vérification (non bloquant)
-        try:
-            from apps.users.email_service import EmailService
-            EmailService.send_verification_email(user)
-            email_sent = True
-        except Exception:
-            email_sent = False
+        from django.conf import settings as _s
+        email_sent = False
+        if not _s.EMAIL_VERIFICATION_ENABLED:
+            user.is_email_verified = True
+            user.save(update_fields=['is_email_verified'])
+        else:
+            try:
+                from apps.users.email_service import EmailService
+                EmailService.send_verification_email(user)
+                email_sent = True
+            except Exception:
+                email_sent = False
 
         refresh = RefreshToken.for_user(user)
         return Response(
@@ -70,9 +76,14 @@ class ResendVerificationView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
+        from django.conf import settings as _s
         user = request.user
         if user.is_email_verified:
             return Response({"message": "Email déjà vérifié."})
+        if not _s.EMAIL_VERIFICATION_ENABLED:
+            user.is_email_verified = True
+            user.save(update_fields=['is_email_verified'])
+            return Response({"message": "Email vérifié."})
         try:
             from apps.users.email_service import EmailService
             EmailService.send_verification_email(user)
