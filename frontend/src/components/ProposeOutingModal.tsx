@@ -45,7 +45,7 @@ export default function ProposeOutingModal({ matchId, partnerName, onClose, onSu
     const t = setTimeout(() => {
       setLoadingFilms(true)
       filmsApi
-        .getAll({ search: query })
+        .getAll({ search: query, is_future: false })
         .then(res => setFilms(res.data.results ?? res.data))
         .catch(() => setFilms([]))
         .finally(() => setLoadingFilms(false))
