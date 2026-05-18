@@ -3,7 +3,5 @@ builder = "nixpacks"
 
 [deploy]
 startCommand = "sh -c 'if [ \"$SERVICE_TYPE\" = \"celery\" ]; then /app/venv/bin/celery -A config.celery worker -l info -B; else /app/venv/bin/python manage.py migrate --noinput && /app/venv/bin/daphne -b 0.0.0.0 -p $PORT config.asgi:application; fi'"
-healthcheckPath = "/api/health/"
-healthcheckTimeout = 60
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
