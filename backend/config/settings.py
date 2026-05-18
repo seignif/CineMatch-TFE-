@@ -19,6 +19,12 @@ if _railway_public and _railway_public not in ALLOWED_HOSTS:
 if 'healthcheck.railway.app' not in ALLOWED_HOSTS:
     ALLOWED_HOSTS.append('healthcheck.railway.app')
 
+# CSRF — obligatoire pour l'admin Django en prod derrière un domaine externe
+CSRF_TRUSTED_ORIGINS = [o for o in config(
+    'CSRF_TRUSTED_ORIGINS',
+    default='https://cinematch-tfe-production.up.railway.app'
+).split(',') if o]
+
 INSTALLED_APPS = [
     'daphne',
     'django.contrib.admin',
