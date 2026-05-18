@@ -11,7 +11,7 @@ class CustomUserAdmin(UserAdmin):
     search_fields = ['email', 'username', 'first_name', 'last_name']
     ordering = ['-date_joined']
     fieldsets = UserAdmin.fieldsets + (
-        ('Infos supplementaires', {'fields': ('date_of_birth', 'city')}),
+        ('Infos supplementaires', {'fields': ('date_of_birth', 'city', 'is_email_verified')}),
     )
 
 
