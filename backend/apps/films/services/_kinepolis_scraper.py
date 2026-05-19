@@ -12,57 +12,83 @@ import platform
 from datetime import date, timedelta
 
 
+def _get_drupal_data(page):
+    """Attend que Drupal.settings.variables soit défini (max 30s) puis le retourne."""
+    page.wait_for_function(
+        "() => typeof Drupal !== 'undefined' && Drupal.settings && Drupal.settings.variables",
+        timeout=30000,
+    )
+    return page.evaluate("() => Drupal.settings.variables")
+
+
 def main():
     from playwright.sync_api import sync_playwright
 
     is_linux = platform.system() == "Linux"
     today = date.today()
-    # Scrape today + next 6 days
     dates = [(today + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(7)]
 
     with sync_playwright() as p:
         if is_linux:
-            # Prod / CI : headless obligatoire, pas de Chrome installé → Chromium system
             browser = p.chromium.launch(
                 headless=True,
                 args=[
                     "--no-sandbox",
                     "--disable-setuid-sandbox",
                     "--disable-dev-shm-usage",
+                    "--disable-gpu",
                     "--disable-blink-features=AutomationControlled",
+                    "--window-size=1920,1080",
                 ],
             )
         else:
-            # Windows dev : headless=False requis (Cloudflare bloque headless)
             browser = p.chromium.launch(
                 headless=False,
                 channel="chrome",
                 args=["--disable-blink-features=AutomationControlled"],
             )
+
         try:
-            page = browser.new_page()
+            context = browser.new_context(
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                ),
+                viewport={"width": 1920, "height": 1080},
+                locale="fr-BE",
+                timezone_id="Europe/Brussels",
+            )
 
-            # Jour 0 : chargement initial avec attente Cloudflare longue
-            page.goto("https://kinepolis.be/fr/", wait_until="networkidle")
-            page.wait_for_timeout(8000)
-            base_data = page.evaluate("() => Drupal.settings.variables")
+            # Masquer les traces d'automatisation
+            context.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+                Object.defineProperty(navigator, 'languages', { get: () => ['fr-BE', 'fr', 'en'] });
+                window.chrome = { runtime: {} };
+            """)
 
-            # Collecter les sessions du jour 0
+            page = context.new_page()
+
+            # Jour 0 : chargement initial — attente Cloudflare
+            page.goto("https://kinepolis.be/fr/", wait_until="networkidle", timeout=60000)
+            base_data = _get_drupal_data(page)
+
             all_sessions = {"current_movies": [], "future_movies": []}
             for section in ("current_movies", "future_movies"):
                 all_sessions[section].extend(
                     base_data.get(section, {}).get("sessions", [])
                 )
 
-            # Jours 1-6 : navigation dans la même session (Cloudflare déjà passé)
+            # Jours 1-6 : même contexte (cookies Cloudflare déjà obtenus)
             for date_str in dates[1:]:
                 try:
                     page.goto(
                         f"https://kinepolis.be/fr/?date={date_str}",
                         wait_until="networkidle",
+                        timeout=30000,
                     )
-                    page.wait_for_timeout(4000)
-                    day_data = page.evaluate("() => Drupal.settings.variables")
+                    day_data = _get_drupal_data(page)
                     for section in ("current_movies", "future_movies"):
                         all_sessions[section].extend(
                             day_data.get(section, {}).get("sessions", [])
@@ -70,7 +96,6 @@ def main():
                 except Exception as e:
                     print(f"[scraper] {date_str} skipped: {e}", file=sys.stderr)
 
-            # Fusionner les sessions dans base_data
             for section in ("current_movies", "future_movies"):
                 if section in base_data:
                     base_data[section]["sessions"] = all_sessions[section]
