@@ -21,9 +21,13 @@ class RecommendationService:
             if profile is None:
                 raise AttributeError
         except Exception:
-            return list(Film.objects.exclude(
+            films = Film.objects.exclude(
                 kinepolis_id__startswith='tmdb_'
-            ).filter(poster_url__gt='').order_by('-tmdb_rating')[:limit])
+            ).filter(poster_url__gt='').order_by('-tmdb_rating')[:limit]
+            return [
+                {'film': f, 'score': float(f.tmdb_rating or 0), 'reasons': ['Populaire en ce moment']}
+                for f in films
+            ]
 
         # Normaliser les clés en minuscules pour éviter les mismatches de casse
         raw_prefs    = profile.genre_preferences or {}
