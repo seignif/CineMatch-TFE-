@@ -60,7 +60,7 @@ class KinepolisService:
         result = subprocess.run(
             [sys.executable, _SCRAPER_SCRIPT],
             capture_output=True,
-            timeout=120,
+            timeout=300,
         )
         if result.returncode != 0:
             logger.error(f"[Kinepolis] Scraper failed:\n{result.stderr.decode('utf-8', errors='replace')}")
