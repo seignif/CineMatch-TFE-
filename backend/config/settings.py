@@ -137,11 +137,14 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # Cloudinary — stockage media en production
 CLOUDINARY_URL = config('CLOUDINARY_URL', default='')
 if CLOUDINARY_URL:
-    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
     INSTALLED_APPS += ['cloudinary_storage', 'cloudinary']
+    _default_storage = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+else:
+    _default_storage = 'django.core.files.storage.FileSystemStorage'
+
 STORAGES = {
     'default': {
-        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+        'BACKEND': _default_storage,
     },
     'staticfiles': {
         'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
