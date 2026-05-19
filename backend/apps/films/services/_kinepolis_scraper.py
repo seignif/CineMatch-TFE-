@@ -13,10 +13,10 @@ from datetime import date, timedelta
 
 
 def _get_drupal_data(page):
-    """Attend que Drupal.settings.variables soit défini (max 30s) puis le retourne."""
+    """Attend que Drupal.settings.variables soit défini (max 90s) puis le retourne."""
     page.wait_for_function(
         "() => typeof Drupal !== 'undefined' && Drupal.settings && Drupal.settings.variables",
-        timeout=30000,
+        timeout=90000,
     )
     return page.evaluate("() => Drupal.settings.variables")
 
@@ -39,6 +39,7 @@ def main():
                     "--disable-gpu",
                     "--disable-blink-features=AutomationControlled",
                     "--window-size=1920,1080",
+                    "--lang=fr-BE",
                 ],
             )
         else:
@@ -58,20 +59,29 @@ def main():
                 viewport={"width": 1920, "height": 1080},
                 locale="fr-BE",
                 timezone_id="Europe/Brussels",
+                extra_http_headers={
+                    "Accept-Language": "fr-BE,fr;q=0.9,en;q=0.8",
+                    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+                },
             )
-
-            # Masquer les traces d'automatisation
-            context.add_init_script("""
-                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-                Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
-                Object.defineProperty(navigator, 'languages', { get: () => ['fr-BE', 'fr', 'en'] });
-                window.chrome = { runtime: {} };
-            """)
 
             page = context.new_page()
 
-            # Jour 0 : chargement initial — attente Cloudflare
-            page.goto("https://kinepolis.be/fr/", wait_until="networkidle", timeout=60000)
+            # playwright-stealth : masque toutes les traces d'automatisation
+            try:
+                from playwright_stealth import stealth_sync
+                stealth_sync(page)
+            except ImportError:
+                # Fallback manuel si playwright-stealth indisponible
+                page.add_init_script("""
+                    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+                    Object.defineProperty(navigator, 'languages', { get: () => ['fr-BE', 'fr', 'en'] });
+                    window.chrome = { runtime: {} };
+                """)
+
+            # Jour 0 : chargement initial — wait_until="load" pour laisser le challenge CF se résoudre
+            page.goto("https://kinepolis.be/fr/", wait_until="load", timeout=90000)
             base_data = _get_drupal_data(page)
 
             all_sessions = {"current_movies": [], "future_movies": []}
@@ -85,7 +95,7 @@ def main():
                 try:
                     page.goto(
                         f"https://kinepolis.be/fr/?date={date_str}",
-                        wait_until="networkidle",
+                        wait_until="load",
                         timeout=30000,
                     )
                     day_data = _get_drupal_data(page)
