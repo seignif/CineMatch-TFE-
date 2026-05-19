@@ -1,9 +1,9 @@
+import threading
 from django.contrib import admin
 from django.urls import path, include
 from django.conf import settings
 from django.conf.urls.static import static
 from django.http import JsonResponse
-from django.views.decorators.http import require_POST
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
@@ -16,9 +16,16 @@ def health_check(request):
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
 def admin_sync_kinepolis(request):
-    from apps.films.tasks import sync_kinepolis_all
-    task = sync_kinepolis_all.delay()
-    return Response({"status": "started", "task_id": task.id})
+    def run():
+        try:
+            from apps.films.services.kinepolis_service import KinepolisService
+            KinepolisService().sync_all()
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"[admin_sync] {e}")
+
+    threading.Thread(target=run, daemon=True).start()
+    return Response({"status": "started"})
 
 
 urlpatterns = [
