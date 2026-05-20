@@ -108,9 +108,10 @@ class KinepolisService:
 
         cdn_base = data.get("movieservice_image_url", CDN_BASE).rstrip("/")
 
-        # Dédupliquer les films (current + future)
+        # Dédupliquer les films — future_movies d'abord, current_movies écrase
+        # pour qu'un film présent dans les deux sections garde showAsFutureRelease=False
         all_films = {}
-        for section in ("current_movies", "future_movies"):
+        for section in ("future_movies", "current_movies"):
             for film_data in data.get(section, {}).get("films", []):
                 all_films[film_data["id"]] = film_data
 
@@ -280,9 +281,10 @@ class KinepolisService:
     # Sync all
     # ------------------------------------------------------------------
 
-    def sync_all(self):
+    def sync_all(self, data=None):
         """Synchronise cinémas, films et séances en une seule passe."""
-        data = self.fetch_data()
+        if data is None:
+            data = self.fetch_data()
         cinemas_count = self.sync_cinemas(data)
         films_count, sessions_count = self.sync_films_and_sessions(data)
         return {
