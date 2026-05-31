@@ -12,6 +12,16 @@ logger = logging.getLogger(__name__)
 
 _SCRAPER_SCRIPT = os.path.join(os.path.dirname(__file__), "_kinepolis_scraper.py")
 
+
+def _fix_mojibake(s: str) -> str:
+    """Corrige les chaînes encodées en double (UTF-8 bytes décodés comme Latin-1 par Kinepolis)."""
+    if not s:
+        return s
+    try:
+        return s.encode('latin-1').decode('utf-8')
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return s
+
 SPECIAL_EVENT_KEYWORDS = [
     'opera ', 'opéra ', 'concert:', 'concert :', 'nt live',
     'exhibition', 'stand-up', 'stand-up', 'docu:', 'sport:',
@@ -202,7 +212,9 @@ class KinepolisService:
         final_poster = poster_url if not (existing and existing.poster_url) else existing.poster_url
         final_backdrop = backdrop_url if not (existing and existing.backdrop_url) else existing.backdrop_url
 
-        title = film_data.get("title") or film_data.get("name", "")
+        title = _fix_mojibake(film_data.get("title") or film_data.get("name", ""))
+        synopsis = _fix_mojibake(film_data.get("synopsis", ""))
+        short_synopsis = _fix_mojibake(film_data.get("shortSynopsis", ""))
         min_age = film_data.get("censor", {}).get("minimumAge") if film_data.get("censor") else None
 
         # Film sorti il y a plus de 2 ans = rétro-projection, traité comme événement spécial
@@ -217,8 +229,8 @@ class KinepolisService:
                 "corporate_id": film_data.get("corporateId"),
                 "imdb_code": film_data.get("imdbCode", ""),
                 "title": title,
-                "synopsis": film_data.get("synopsis", ""),
-                "short_synopsis": film_data.get("shortSynopsis", ""),
+                "synopsis": synopsis,
+                "short_synopsis": short_synopsis,
                 "duration": film_data.get("duration"),
                 "release_date": release_date,
                 "language": film_data.get("language", "FR"),
