@@ -6,7 +6,7 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
-@shared_task(bind=True, max_retries=3, default_retry_delay=300)
+@shared_task(bind=True, max_retries=0)
 def sync_kinepolis_all(self):
     """
     Synchronise cinémas, films et séances depuis kinepolis.be.
@@ -26,8 +26,8 @@ def sync_kinepolis_all(self):
         return result
 
     except Exception as exc:
-        logger.error(f"[Celery] Erreur synchronisation Kinepolis: {exc}")
-        raise self.retry(exc=exc)
+        logger.error(f"[Celery] Erreur synchronisation Kinepolis (Cloudflare bloque Railway): {exc}")
+        return {"error": str(exc)}
 
 
 @shared_task
