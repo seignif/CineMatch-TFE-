@@ -30,6 +30,35 @@ def admin_sync_kinepolis(request):
 
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
+def admin_fix_mojibake(request):
+    """Corrige en arrière-plan les titres/synopses Mojibake déjà en base."""
+    def run():
+        try:
+            from apps.films.models import Film
+            from apps.films.services.kinepolis_service import _fix_mojibake
+            import logging
+            fixed = 0
+            for film in Film.objects.all():
+                new_title = _fix_mojibake(film.title)
+                new_synopsis = _fix_mojibake(film.synopsis)
+                new_short = _fix_mojibake(film.short_synopsis)
+                if new_title != film.title or new_synopsis != film.synopsis or new_short != film.short_synopsis:
+                    film.title = new_title
+                    film.synopsis = new_synopsis
+                    film.short_synopsis = new_short
+                    film.save(update_fields=['title', 'synopsis', 'short_synopsis'])
+                    fixed += 1
+            logging.getLogger(__name__).info(f"[fix_mojibake] {fixed} films corrigés")
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"[fix_mojibake] {e}")
+
+    threading.Thread(target=run, daemon=True).start()
+    return Response({"status": "started"})
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
 def admin_sync_kinepolis_data(request):
     """Reçoit les données Kinepolis scrapées localement et les sync dans la DB Railway."""
     data = request.data
@@ -55,5 +84,6 @@ urlpatterns = [
     path('api/health/', health_check, name='health-check'),
     path('api/admin/sync-kinepolis/', admin_sync_kinepolis, name='admin-sync-kinepolis'),
     path('api/admin/sync-kinepolis-data/', admin_sync_kinepolis_data, name='admin-sync-kinepolis-data'),
+    path('api/admin/fix-mojibake/', admin_fix_mojibake, name='admin-fix-mojibake'),
     path('api/', include('api.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
