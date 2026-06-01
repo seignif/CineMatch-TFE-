@@ -1,17 +1,22 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, Check } from 'lucide-react'
+import { Bell, Check, Heart, MessageCircle, Sparkles, Users, Film } from 'lucide-react'
 import type { SocialNotification } from '../types'
 import { socialApi } from '../services/api'
 import { formatDistanceToNow } from '../utils/dateUtils'
 import { mediaUrl } from '../utils/media'
 
-const TYPE_ICON: Record<SocialNotification['type'], string> = {
-  like_post: '❤️',
-  comment_post: '💬',
-  new_match: '🎉',
-  group_invitation: '👥',
-  outing_confirmed: '🍿',
+const TYPE_ICON: Record<SocialNotification['type'], React.ElementType> = {
+  like_post: Heart,
+  comment_post: MessageCircle,
+  new_match: Sparkles,
+  group_invitation: Users,
+  outing_confirmed: Film,
+}
+
+function NotifIcon({ type, size }: { type: SocialNotification['type'], size: number }) {
+  const Icon = TYPE_ICON[type]
+  return <Icon size={size} className="text-[var(--accent-red)]" />
 }
 
 export default function Notifications() {
@@ -123,18 +128,18 @@ export default function Notifications() {
               <div className="relative flex-shrink-0">
                 {notif.triggered_by_picture ? (
                   <img
-                    src={mediaUrl(notif.triggered_by_picture!)}
+                    src={mediaUrl(notif.triggered_by_picture) ?? ''}
                     alt={notif.triggered_by_name ?? ''}
                     className="w-10 h-10 rounded-full object-cover bg-white/10"
                   />
                 ) : (
-                  <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-lg">
-                    {TYPE_ICON[notif.type]}
+                  <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center">
+                    <NotifIcon type={notif.type} size={20} />
                   </div>
                 )}
                 {notif.triggered_by_picture && (
-                  <span className="absolute -bottom-0.5 -right-0.5 text-sm">
-                    {TYPE_ICON[notif.type]}
+                  <span className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-[var(--bg-card)] flex items-center justify-center">
+                    <NotifIcon type={notif.type} size={11} />
                   </span>
                 )}
               </div>
