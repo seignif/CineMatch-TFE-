@@ -29,10 +29,7 @@ class TMDbService:
         self.session = requests.Session()
         self.session.params = {'api_key': self.api_key, 'language': 'fr-BE'}
 
-    # ------------------------------------------------------------------
-    # HTTP helpers
-    # ------------------------------------------------------------------
-
+  
     def _get(self, endpoint, extra_params=None, cache_key=None):
         if cache_key:
             cached = cache.get(cache_key)
@@ -55,9 +52,6 @@ class TMDbService:
             logger.error(f"[TMDb] Erreur {endpoint}: {e}")
             return None
 
-    # ------------------------------------------------------------------
-    # Lookup methods
-    # ------------------------------------------------------------------
 
     def find_by_imdb(self, imdb_code: str):
         """Cherche un film TMDb via son code IMDb (ex: 'tt1234567')."""
@@ -137,9 +131,6 @@ class TMDbService:
                     break
         return crew
 
-    # ------------------------------------------------------------------
-    # Image URL helpers
-    # ------------------------------------------------------------------
 
     def _build_image_url(self, path: str, size: str) -> str:
         if not path:
@@ -156,9 +147,6 @@ class TMDbService:
     def make_backdrop_url(self, path: str) -> str:
         return self._build_image_url(path, IMAGE_SIZE_BACKDROP)
 
-    # ------------------------------------------------------------------
-    # Trailer extraction
-    # ------------------------------------------------------------------
 
     def _extract_trailer_key(self, details: dict) -> str:
         videos = details.get('videos', {}).get('results', [])
@@ -170,11 +158,7 @@ class TMDbService:
                         return v['key']
         return ''
 
-    # ------------------------------------------------------------------
-    # Age certification extraction
-    # ------------------------------------------------------------------
 
-    # Mapping certification → min_age, par ordre de priorité de pays
     _CERT_TO_AGE = {
         # Belgique / France
         'KT': 0, 'AL': 0, 'TP': 0, 'U': 0, 'G': 0, 'Tout public': 0,
@@ -196,9 +180,6 @@ class TMDbService:
                     return self._CERT_TO_AGE[cert]
         return None
 
-    # ------------------------------------------------------------------
-    # Genre sync
-    # ------------------------------------------------------------------
 
     def sync_genres(self) -> int:
         """Synchronise les genres TMDb vers la base de données."""
@@ -219,9 +200,6 @@ class TMDbService:
         logger.info(f"[TMDb] Genres: {count} nouveaux synchronises")
         return count
 
-    # ------------------------------------------------------------------
-    # Film enrichment
-    # ------------------------------------------------------------------
 
     def enrich_film(self, film) -> bool:
         """
@@ -230,7 +208,7 @@ class TMDbService:
         """
         from apps.films.models import Genre
 
-        # 1. Find TMDb entry — utilise le tmdb_id existant si disponible
+        
         tmdb_data = None
         tmdb_id = film.tmdb_id
 
@@ -247,18 +225,18 @@ class TMDbService:
             if not tmdb_id:
                 return False
 
-        # 2. Get full details (with videos)
+        
         details = self.get_details(tmdb_id)
         if not details:
             return False
 
-        # 3. Build update dict
+        
         fallback = tmdb_data or {}
         poster_path = details.get('poster_path') or fallback.get('poster_path', '')
         backdrop_path = details.get('backdrop_path') or fallback.get('backdrop_path', '')
         vote_average = details.get('vote_average') or fallback.get('vote_average')
 
-        # Si un autre film a déjà ce tmdb_id, on n'écrase pas la clé unique
+        
         from apps.films.models import Film as FilmModel
         tmdb_id_already_used = FilmModel.objects.filter(
             tmdb_id=tmdb_id
@@ -280,14 +258,13 @@ class TMDbService:
         if vote_average:
             updates['tmdb_rating'] = round(float(vote_average), 1)
 
-        # Fill synopsis if missing
+        
         if not film.synopsis and details.get('overview'):
             updates['synopsis'] = details['overview']
 
         for field, value in updates.items():
             setattr(film, field, value)
 
-        # 4. Acteurs & équipe technique
         if not film.cast:
             credits = self.get_movie_credits(tmdb_id)
             if credits:
@@ -298,7 +275,6 @@ class TMDbService:
 
         film.save(update_fields=list(updates.keys()))
 
-        # 6. Sync genres
         tmdb_genre_ids = [g['id'] for g in details.get('genres', [])]
         if tmdb_genre_ids:
             genres = Genre.objects.filter(tmdb_id__in=tmdb_genre_ids)
@@ -308,9 +284,6 @@ class TMDbService:
         logger.debug(f"[TMDb] Enrichi: {film.title} (tmdb_id={tmdb_id})")
         return True
 
-    # ------------------------------------------------------------------
-    # Bulk enrichment
-    # ------------------------------------------------------------------
 
     def enrich_credits_only(self) -> dict:
         """Enrichit uniquement les films avec tmdb_id mais sans cast."""
