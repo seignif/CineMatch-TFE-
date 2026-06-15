@@ -79,11 +79,32 @@ def admin_sync_kinepolis_data(request):
     return Response({"status": "started"})
 
 
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
+def admin_enrich_tmdb(request):
+    """Lance l'enrichissement TMDb en arrière-plan."""
+    def run():
+        try:
+            from apps.films.services.tmdb_service import TMDbService
+            import logging
+            svc = TMDbService()
+            svc.sync_genres()
+            result = svc.enrich_all()
+            logging.getLogger(__name__).info(f"[enrich_tmdb] {result}")
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).error(f"[enrich_tmdb] {e}")
+
+    threading.Thread(target=run, daemon=True).start()
+    return Response({"status": "started"})
+
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/health/', health_check, name='health-check'),
     path('api/admin/sync-kinepolis/', admin_sync_kinepolis, name='admin-sync-kinepolis'),
     path('api/admin/sync-kinepolis-data/', admin_sync_kinepolis_data, name='admin-sync-kinepolis-data'),
     path('api/admin/fix-mojibake/', admin_fix_mojibake, name='admin-fix-mojibake'),
+    path('api/admin/enrich-tmdb/', admin_enrich_tmdb, name='admin-enrich-tmdb'),
     path('api/', include('api.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
