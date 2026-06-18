@@ -251,8 +251,9 @@ export default function Matching() {
   useEffect(() => {
     matchingApi.getCandidates()
       .then(res => {
-        setCandidates(res.data)
-        setCurrentIndex(res.data.length - 1)
+        const sorted = [...res.data].reverse()
+        setCandidates(sorted)
+        setCurrentIndex(sorted.length - 1)
       })
       .catch(() => setCandidates([]))
       .finally(() => setLoading(false))
