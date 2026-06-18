@@ -149,6 +149,51 @@ def admin_merge_genres(request):
 
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
+def admin_fix_genre_prefs(request):
+    """Corrige directement les clés erronées dans genre_preferences de tous les profils."""
+    def run():
+        import logging
+        log = logging.getLogger(__name__)
+        try:
+            from apps.users.models import UserProfile
+
+            # Mapping exact : ancienne clé → nouvelle clé canonique
+            KEY_MAP = {
+                "Science-fiction": "Science-Fiction",
+                "Sciencefiction": "Science-Fiction",
+                "science-fiction": "Science-Fiction",
+                "sciencefiction": "Science-Fiction",
+                "Aventures": "Aventure",
+                "Romantique": "Romance",
+                "Dessin animé": "Animation",
+                "Dessin anime": "Animation",
+            }
+
+            fixed = 0
+            for profile in UserProfile.objects.all():
+                prefs = profile.genre_preferences or {}
+                changed = False
+                for old_key, new_key in KEY_MAP.items():
+                    if old_key in prefs and old_key != new_key:
+                        val = prefs.pop(old_key)
+                        prefs[new_key] = max(prefs.get(new_key, 0), val)
+                        changed = True
+                        log.info(f"[fix_genre_prefs] Profil {profile.id}: {old_key!r} → {new_key!r}")
+                if changed:
+                    profile.genre_preferences = prefs
+                    profile.save(update_fields=['genre_preferences'])
+                    fixed += 1
+
+            log.info(f"[fix_genre_prefs] {fixed} profils corrigés")
+        except Exception as e:
+            logging.getLogger(__name__).error(f"[fix_genre_prefs] {e}")
+
+    threading.Thread(target=run, daemon=True).start()
+    return Response({"status": "started"})
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
 def admin_enrich_tmdb(request):
     """Lance l'enrichissement TMDb en arrière-plan."""
     def run():
@@ -174,6 +219,7 @@ urlpatterns = [
     path('api/admin/sync-kinepolis-data/', admin_sync_kinepolis_data, name='admin-sync-kinepolis-data'),
     path('api/admin/fix-mojibake/', admin_fix_mojibake, name='admin-fix-mojibake'),
     path('api/admin/merge-genres/', admin_merge_genres, name='admin-merge-genres'),
+    path('api/admin/fix-genre-prefs/', admin_fix_genre_prefs, name='admin-fix-genre-prefs'),
     path('api/admin/enrich-tmdb/', admin_enrich_tmdb, name='admin-enrich-tmdb'),
     path('api/', include('api.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
