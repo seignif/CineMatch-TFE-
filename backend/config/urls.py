@@ -90,39 +90,54 @@ def admin_merge_genres(request):
             from apps.films.models import Genre
             from apps.users.models import UserProfile
 
-            MERGES = [
-                ("Sciencefiction", "Science-Fiction"),
-                ("Aventures", "Aventure"),
-                ("Dessin animé", "Animation"),
-                ("Romantique", "Romance"),
-            ]
+            # canonical name → liste de variantes à fusionner (comparaison insensible à la casse)
+            MERGES = {
+                "Science-Fiction": ["sciencefiction", "science-fiction", "science fiction"],
+                "Aventure": ["aventures"],
+                "Animation": ["dessin animé", "dessin anime"],
+                "Romance": ["romantique"],
+            }
 
-            for old_name, new_name in MERGES:
-                try:
-                    old = Genre.objects.filter(name=old_name).first()
-                    new = Genre.objects.filter(name=new_name).first()
-                    if not old or not new:
-                        log.info(f"[merge_genres] Skip {old_name!r} → {new_name!r} (introuvable)")
+            canonical_genres = {g.name: g for g in Genre.objects.all()}
+
+            for canonical_name, variants in MERGES.items():
+                new = canonical_genres.get(canonical_name)
+                if not new:
+                    log.info(f"[merge_genres] Genre canonique {canonical_name!r} introuvable, skip")
+                    continue
+
+                # Fusionner les genres DB qui correspondent à une variante
+                for old in Genre.objects.all():
+                    if old.name == canonical_name:
                         continue
+                    if old.name.lower().replace(" ", "").replace("-", "") in [v.replace(" ", "").replace("-", "") for v in variants]:
+                        try:
+                            for film in old.film_set.all():
+                                film.genres.add(new)
+                                film.genres.remove(old)
+                            old.delete()
+                            log.info(f"[merge_genres] Genre DB {old.name!r} → {canonical_name!r} OK")
+                        except Exception as e:
+                            log.error(f"[merge_genres] Erreur genre DB {old.name!r}: {e}")
 
-                    # Réassigner les films
-                    for film in old.film_set.all():
-                        film.genres.add(new)
-                        film.genres.remove(old)
+                # Nettoyer genre_preferences dans tous les profils
+                for profile in UserProfile.objects.all():
+                    prefs = profile.genre_preferences or {}
+                    changed = False
+                    for key in list(prefs.keys()):
+                        if key == canonical_name:
+                            continue
+                        normalized = key.lower().replace(" ", "").replace("-", "")
+                        if normalized in [v.replace(" ", "").replace("-", "") for v in variants]:
+                            old_val = prefs.pop(key)
+                            prefs[canonical_name] = max(prefs.get(canonical_name, 0), old_val)
+                            changed = True
+                            log.info(f"[merge_genres] Profil {profile.id}: {key!r} → {canonical_name!r}")
+                    if changed:
+                        profile.genre_preferences = prefs
+                        profile.save(update_fields=['genre_preferences'])
 
-                    # Mettre à jour genre_preferences dans les profils
-                    for profile in UserProfile.objects.all():
-                        prefs = profile.genre_preferences or {}
-                        if old_name in prefs:
-                            old_val = prefs.pop(old_name)
-                            prefs[new_name] = max(prefs.get(new_name, 0), old_val)
-                            profile.genre_preferences = prefs
-                            profile.save(update_fields=['genre_preferences'])
-
-                    old.delete()
-                    log.info(f"[merge_genres] {old_name!r} → {new_name!r} OK")
-                except Exception as e:
-                    log.error(f"[merge_genres] Erreur {old_name!r}: {e}")
+            log.info("[merge_genres] Terminé")
 
             log.info("[merge_genres] Terminé")
         except Exception as e:
