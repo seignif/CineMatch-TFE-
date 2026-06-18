@@ -194,6 +194,50 @@ def admin_fix_genre_prefs(request):
 
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
+def admin_delete_duplicate_genres(request):
+    """Supprime les genres en double en les remplaçant par leur équivalent canonique."""
+    def run():
+        import logging
+        log = logging.getLogger(__name__)
+        try:
+            from apps.films.models import Genre, Film
+
+            DUPLICATES = {
+                "Science-fiction": "Science-Fiction",
+                "Sciencefiction": "Science-Fiction",
+                "Aventures": "Aventure",
+                "Romantique": "Romance",
+                "Dessin animé": "Animation",
+            }
+
+            for old_name, canonical_name in DUPLICATES.items():
+                old = Genre.objects.filter(name=old_name).first()
+                canonical = Genre.objects.filter(name=canonical_name).first()
+                if not old:
+                    log.info(f"[del_genres] {old_name!r} introuvable, skip")
+                    continue
+                if not canonical:
+                    log.info(f"[del_genres] Canonique {canonical_name!r} introuvable pour {old_name!r}, skip")
+                    continue
+                # Réassigner les films via queryset direct
+                films_with_old = Film.objects.filter(genres=old)
+                for film in films_with_old:
+                    film.genres.add(canonical)
+                    film.genres.remove(old)
+                count = films_with_old.count()
+                old.delete()
+                log.info(f"[del_genres] Supprimé {old_name!r} ({count} films migrés vers {canonical_name!r})")
+
+            log.info("[del_genres] Terminé")
+        except Exception as e:
+            logging.getLogger(__name__).error(f"[del_genres] ERREUR: {e}")
+
+    threading.Thread(target=run, daemon=True).start()
+    return Response({"status": "started"})
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
 def admin_enrich_tmdb(request):
     """Lance l'enrichissement TMDb en arrière-plan."""
     def run():
@@ -220,6 +264,7 @@ urlpatterns = [
     path('api/admin/fix-mojibake/', admin_fix_mojibake, name='admin-fix-mojibake'),
     path('api/admin/merge-genres/', admin_merge_genres, name='admin-merge-genres'),
     path('api/admin/fix-genre-prefs/', admin_fix_genre_prefs, name='admin-fix-genre-prefs'),
+    path('api/admin/delete-duplicate-genres/', admin_delete_duplicate_genres, name='admin-delete-duplicate-genres'),
     path('api/admin/enrich-tmdb/', admin_enrich_tmdb, name='admin-enrich-tmdb'),
     path('api/', include('api.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
