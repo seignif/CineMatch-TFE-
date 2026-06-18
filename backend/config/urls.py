@@ -81,6 +81,59 @@ def admin_sync_kinepolis_data(request):
 
 @api_view(['POST'])
 @permission_classes([IsAdminUser])
+def admin_merge_genres(request):
+    """Fusionne les genres Kinepolis en double avec leurs équivalents TMDb."""
+    def run():
+        import logging
+        log = logging.getLogger(__name__)
+        try:
+            from apps.films.models import Genre
+            from apps.users.models import UserProfile
+
+            MERGES = [
+                ("Sciencefiction", "Science-Fiction"),
+                ("Aventures", "Aventure"),
+                ("Dessin animé", "Animation"),
+                ("Romantique", "Romance"),
+            ]
+
+            for old_name, new_name in MERGES:
+                try:
+                    old = Genre.objects.filter(name=old_name).first()
+                    new = Genre.objects.filter(name=new_name).first()
+                    if not old or not new:
+                        log.info(f"[merge_genres] Skip {old_name!r} → {new_name!r} (introuvable)")
+                        continue
+
+                    # Réassigner les films
+                    for film in old.film_set.all():
+                        film.genres.add(new)
+                        film.genres.remove(old)
+
+                    # Mettre à jour genre_preferences dans les profils
+                    for profile in UserProfile.objects.all():
+                        prefs = profile.genre_preferences or {}
+                        if old_name in prefs:
+                            old_val = prefs.pop(old_name)
+                            prefs[new_name] = max(prefs.get(new_name, 0), old_val)
+                            profile.genre_preferences = prefs
+                            profile.save(update_fields=['genre_preferences'])
+
+                    old.delete()
+                    log.info(f"[merge_genres] {old_name!r} → {new_name!r} OK")
+                except Exception as e:
+                    log.error(f"[merge_genres] Erreur {old_name!r}: {e}")
+
+            log.info("[merge_genres] Terminé")
+        except Exception as e:
+            logging.getLogger(__name__).error(f"[merge_genres] {e}")
+
+    threading.Thread(target=run, daemon=True).start()
+    return Response({"status": "started"})
+
+
+@api_view(['POST'])
+@permission_classes([IsAdminUser])
 def admin_enrich_tmdb(request):
     """Lance l'enrichissement TMDb en arrière-plan."""
     def run():
@@ -105,6 +158,7 @@ urlpatterns = [
     path('api/admin/sync-kinepolis/', admin_sync_kinepolis, name='admin-sync-kinepolis'),
     path('api/admin/sync-kinepolis-data/', admin_sync_kinepolis_data, name='admin-sync-kinepolis-data'),
     path('api/admin/fix-mojibake/', admin_fix_mojibake, name='admin-fix-mojibake'),
+    path('api/admin/merge-genres/', admin_merge_genres, name='admin-merge-genres'),
     path('api/admin/enrich-tmdb/', admin_enrich_tmdb, name='admin-enrich-tmdb'),
     path('api/', include('api.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
